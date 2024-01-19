@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-05-09 14:15:58
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2022-05-19 18:23:08
+# @Last Modified time: 2024-01-18 16:30:01
 import numpy as np
 from numba import jit
 import pandas as pd
@@ -36,12 +36,12 @@ def get_memory_map(filepath, nChannels, frequency=20000):
     return fp, timestep
 
 
-def detect_ufos(fp, channels, timestep):
+def detect_ufos(fp, sign_channels, ctrl_channels, timestep):
     frequency = 20000
-    freq_band = (600, 4000)
-    thres_band = (5, 100)
-    wsize = 61
-    duration_band = (1, 10)
+    freq_band = (600, 2000)
+    thres_band = (3, 100)
+    wsize = 101
+    duration_band = (3, 30)
     min_inter_duration = 5
     
     batch_size = frequency*500
@@ -51,36 +51,38 @@ def detect_ufos(fp, channels, timestep):
 
     starts = np.arange(0, len(timestep), batch_size)
 
-    controls = np.array(list(set(np.arange(fp.shape[1])) - set(channels)))
-    #controls = np.random.choice(controls, len(channels), replace=False)
+    # controls = np.array(list(set(np.arange(fp.shape[1])) - set(channels)))
+    # controls = np.random.choice(controls, len(channels), replace=False)
 
     # idx = np.logical_and(timestep > ep.loc[0, "start"], timestep<ep.loc[0,"end"])
 
-    for i,s in enumerate(starts):        
+    for i,s in enumerate(starts):
 
         meannSS = np.zeros(np.minimum(batch_size,len(timestep)-s))
-        for j, c in enumerate(channels):
-            print(i/len(starts),j/len(channels), end="\r", flush=True)
+        for j, c in enumerate(sign_channels):
+            print(i/len(starts),j/len(sign_channels), end="\r", flush=True)
             lfp = nap.Tsd(t=timestep[s:s+batch_size], d = np.array(fp[s:s+batch_size,c][:]))
             signal = pyna.eeg_processing.bandpass_filter(lfp, freq_band[0], freq_band[1], frequency)
             squared_signal = np.square(signal.values)
             window = np.ones(wsize)/wsize
             nSS = filtfilt(window, 1, squared_signal)
-            nSS = (nSS - np.mean(nSS))/np.std(nSS)
+            nSS = nSS - np.mean(nSS)
+            nSS = nSS/np.std(nSS)
             meannSS += nSS        
-        meannSS = meannSS / len(channels)        
+        meannSS = meannSS / len(sign_channels)        
         
         meanctr = np.zeros(np.minimum(batch_size,len(timestep)-s))  
-        for j, c in enumerate(controls):
-            print(i/len(starts),j/len(controls), end="\r", flush=True)
+        for j, c in enumerate(ctrl_channels):
+            print(i/len(starts),j/len(ctrl_channels), end="\r", flush=True)
             lfp = nap.Tsd(t=timestep[s:s+batch_size], d = np.array(fp[s:s+batch_size,c][:]))            
             signal = pyna.eeg_processing.bandpass_filter(lfp, freq_band[0], freq_band[1], frequency)
             squared_signal = np.square(signal.values)
             window = np.ones(wsize)/wsize
             nSS = filtfilt(window, 1, squared_signal)
-            nSS = (nSS - np.mean(nSS))/np.std(nSS)
+            nSS = nSS - np.mean(nSS)
+            nSS = nSS/np.std(nSS)
             meanctr += nSS        
-        meanctr = meanctr / len(controls)
+        meanctr = meanctr / len(ctrl_channels)
         
         nSS = meannSS - meanctr
         nSS = nap.Tsd(t = timestep[s:s+batch_size], d=nSS)
@@ -106,17 +108,17 @@ def detect_ufos(fp, channels, timestep):
             # Extracting Oscillation peak
             osc_max = []
             osc_tsd = []
-            for s, e in osc_ep.values:
-                tmp = nSS.loc[s:e]
-                osc_tsd.append(tmp.idxmax())
-                osc_max.append(tmp.max())
+            for i in osc_ep.index.values:
+                tmp = nSS.restrict(osc_ep.loc[[i]])
+                osc_tsd.append(tmp.index[np.argmax(tmp)])
+                osc_max.append(np.max(tmp))
 
             osc_max = np.array(osc_max)
             osc_tsd = np.array(osc_tsd)
 
-            osc_tsd = nap.Tsd(t=osc_tsd, d=osc_max)
+            osc_tsd = pd.Series(index=osc_tsd, data=osc_max)
 
-            ufo_tsd.append(osc_tsd.as_series())
+            ufo_tsd.append(osc_tsd)
             ufo_ep.append(osc_ep.as_units('s'))
 
     ufo_tsd = pd.concat(ufo_tsd)
@@ -160,3 +162,13 @@ def loadRipples(path):
         return None, None
     return (nap.IntervalSet(ripples[:,0], ripples[:,2], time_units = 's'), 
             nap.Ts(ripples[:,1], time_units = 's'))
+
+# def downsample(tsd, up, down):
+#   import scipy.signal
+    
+#   dtsd = scipy.signal.resample_poly(tsd.values, up, down)
+#   dt = tsd.as_units('s').index.values[np.arange(0, tsd.shape[0], down)]
+#   if len(tsd.shape) == 1:     
+#       return nap.Tsd(dt, dtsd, time_units = 's')
+#   elif len(tsd.shape) == 2:
+#       return nap.TsdFrame(dt, dtsd, time_units = 's', columns = list(tsd.columns))

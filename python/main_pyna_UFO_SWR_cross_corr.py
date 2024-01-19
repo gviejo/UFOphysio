@@ -2,10 +2,11 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-05-18 17:59:27
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2022-06-09 18:31:52
+# @Last Modified time: 2023-12-02 19:02:23
 import numpy as np
 import pandas as pd
 import pynapple as nap
+import nwbmatic as ntm
 import sys, os
 from pycircstat.descriptive import mean as circmean
 import _pickle as cPickle
@@ -18,10 +19,16 @@ from ufo_detection import *
 ############################################################################################### 
 # GENERAL infos
 ###############################################################################################
-data_directory = '/mnt/DataGuillaume/'
-datasets = np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ripples.list'), delimiter = '\n', dtype = str, comments = '#')
+if os.path.exists("/mnt/Data/Data/"):
+    data_directory = "/mnt/Data/Data"
+elif os.path.exists('/mnt/DataRAID2/'):    
+    data_directory = '/mnt/DataRAID2/'
+elif os.path.exists('/mnt/ceph/users/gviejo'):    
+    data_directory = '/mnt/ceph/users/gviejo'
+elif os.path.exists('/media/guillaume/Raid2'):
+    data_directory = '/media/guillaume/Raid2'
 
-infos = getAllInfos(data_directory, datasets)
+datasets = np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ripples.list'), delimiter = '\n', dtype = str, comments = '#')
 
 cc_short = {}
 cc_long = {}
@@ -32,7 +39,7 @@ for s in datasets:
     # LOADING DATA
     ###############################################################################################
     path = os.path.join(data_directory, s)
-    data = nap.load_session(path, 'neurosuite')
+    data = ntm.load_session(path, 'neurosuite')
     spikes = data.spikes
     position = data.position
     wake_ep = data.epochs['wake']
@@ -61,11 +68,14 @@ cc_short = cc_short.rolling(window=20,win_type='gaussian',center=True,min_period
 figure()
 subplot(121)
 plot(cc_long, alpha = 0.5, linewidth=1)
-plot(cc_long.mean(1), linewidth = 4, color = 'red')
-xlabel("ufo/swr (s)")
+plot(cc_long.mean(1), linewidth = 4, color = 'red', label = "SWR")
+legend()
+xlabel("ufo (s)")
 subplot(122)
 plot(cc_short, alpha = 0.5, linewidth=1)
-plot(cc_short.mean(1), linewidth = 4, color = 'red')
-xlabel("ufo/swr (s)")
+plot(cc_short.mean(1), linewidth = 4, color = 'red', label = "SWR")
+legend()
+xlabel("ufo (s)")
 
+savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/Cross-corr_UFO_SWR.png"))
 show()

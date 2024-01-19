@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-02-28 16:16:36
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2022-03-11 18:50:24
+# @Last Modified time: 2023-12-10 17:54:31
 import numpy as np
 from numba import jit
 import pandas as pd
@@ -14,7 +14,9 @@ from pycircstat.descriptive import mean as circmean
 from pylab import *
 import pynapple as nap
 from matplotlib.colors import hsv_to_rgb
-import xgboost as xgb
+# import xgboost as xgb
+import warnings
+warnings.filterwarnings("ignore")
 
 def getAllInfos(data_directory, datasets):
     allm = np.unique(["/".join(s.split("/")[0:2]) for s in datasets])
@@ -77,27 +79,23 @@ def findHDCells(tuning_curves, z = 50, p = 0.0001 , m = 1):
 
 def computeLinearVelocity(pos, ep, bin_size):
     pos = pos.restrict(ep)
-    bins = np.arange(ep.as_units('s').start.iloc[0], ep.as_units('s').end.iloc[-1]+bin_size, bin_size)
-    idx = np.digitize(pos.index.values, bins)-1
-    pos2 = pos.groupby(idx).mean()
-    pos2.index = bins[0:-1] + np.diff(bins)/2
-    pos2 = pos2.rolling(window=100,win_type='gaussian',center=True,min_periods=1).mean(std=1.0) 
-    speed = np.sqrt(np.power(pos2.diff().dropna(), 2).sum(1))
-    speed = nap.Tsd(t = bins[1:-1], d = speed.values, time_support = ep)
+    pos2 = pos.bin_average(bin_size)
+    pos2 = pos2.smooth(1, 100)
+    speed = np.sqrt(np.sum(np.power(pos2.values[1:, :] - pos2.values[0:-1, :], 2), 1))
+    t = pos2.index.values[0:-1]+np.diff(pos2.index.values)
+    speed = nap.Tsd(t = t, d=speed, time_support = ep)
     return speed
 
 def computeAngularVelocity(angle, ep, bin_size):
     """this function only works for single epoch
-    """
-    angle           = angle.restrict(ep)
-    bins = np.arange(ep.as_units('s').start.iloc[0], ep.as_units('s').end.iloc[-1]+bin_size, bin_size)
-    idx = np.digitize(angle.index.values, bins)-1
-    tmp = angle.as_series().groupby(idx).mean()
-    t = bins[0:-1] + np.diff(bins)/2.    
-    tmp = pd.Series(index = t[tmp.index.values], data = np.unwrap(tmp.values))
-    tmp2 = tmp.rolling(window=100,win_type='gaussian',center=True,min_periods=1).mean(std=5.0)  
-    tmp3 = np.diff(tmp2.values)/np.diff(tmp2.index.values)
-    velocity        = nap.Tsd(t=tmp2.index.values[1:], d = np.abs(tmp3))
+    """        
+    tmp = np.unwrap(angle.restrict(ep).values)
+    tmp = pd.Series(index=angle.restrict(ep).index.values, data=tmp)
+    tmp = tmp.rolling(window=100,win_type='gaussian',center=True,min_periods=1).mean(std=2.0)    
+    tmp = nap.Tsd(t = tmp.index.values, d = tmp.values)    
+    tmp = tmp.bin_average(bin_size)
+    t = tmp.index.values[0:-1]+np.diff(tmp.index.values)
+    velocity = nap.Tsd(t=t, d = np.diff(tmp))
     return velocity
 
 def getRGB(angle, ep, bin_size):

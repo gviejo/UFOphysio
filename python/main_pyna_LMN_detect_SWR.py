@@ -2,11 +2,12 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2022-05-19 14:16:39
+# @Last Modified time: 2023-12-03 16:44:10
 
 import numpy as np
 import pandas as pd
 import pynapple as nap
+import nwbmatic as ntm
 import sys, os
 from pycircstat.descriptive import mean as circmean
 import _pickle as cPickle
@@ -19,26 +20,34 @@ from ufo_detection import *
 ############################################################################################### 
 # GENERAL infos
 ###############################################################################################
-data_directory = '/mnt/DataGuillaume/'
+if os.path.exists("/mnt/Data/Data/"):
+    data_directory = "/mnt/Data/Data"
+elif os.path.exists('/mnt/DataRAID2/'):    
+    data_directory = '/mnt/DataRAID2/'
+elif os.path.exists('/mnt/ceph/users/gviejo'):    
+    data_directory = '/mnt/ceph/users/gviejo'
+elif os.path.exists('/media/guillaume/Raid2'):
+    data_directory = '/media/guillaume/Raid2'
+
 datasets = np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ripples.list'), delimiter = '\n', dtype = str, comments = '#')
 
-infos = getAllInfos(data_directory, datasets)
 
-rip_ch = {'A5022':3,'A5026':4, 'A5027':4}
+rip_ch = {'A5022':3,'A5026':4, 'A5027':4, 'A5030':11, 'A5030-220220A':1}
 
-for s in datasets:    
+for s in datasets:
     print(s)
     ############################################################################################### 
     # LOADING DATA
     ###############################################################################################
     path = os.path.join(data_directory, s)
-    data = nap.load_session(path, 'neurosuite')
+    data = ntm.load_session(path, 'neurosuite')
     spikes = data.spikes
     position = data.position
     wake_ep = data.epochs['wake']
     sleep_ep = data.epochs['sleep']
 
     lfp = data.load_lfp(channel=rip_ch[data.basename.split("-")[0]],extension='.eeg',frequency=1250.0)
+
     rip_ep, rip_tsd = pyna.eeg_processing.detect_oscillatory_events(
                                                 lfp = lfp,
                                                 epoch = sleep_ep,
