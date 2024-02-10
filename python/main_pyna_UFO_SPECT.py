@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-01-18 16:35:13
+# @Last Modified time: 2024-02-07 10:12:31
 
 import numpy as np
 import pandas as pd
@@ -18,6 +18,8 @@ from functions import *
 import pynacollada as pyna
 from ufo_detection import *
 from scipy import signal
+from multiprocessing import Pool
+import functools
 
 ############################################################################################### 
 # GENERAL infos
@@ -33,8 +35,7 @@ elif os.path.exists('/media/guillaume/Raid2'):
 
 datasets = {'lmn':np.genfromtxt(os.path.join(data_directory,'datasets_LMN.list'), delimiter = '\n', dtype = str, comments = '#'),
             'adn':np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ADN.list'), delimiter = '\n', dtype = str, comments = '#'),            
-            'psb':np.genfromtxt(os.path.join(data_directory,'datasets_LMN_PSB.list'), delimiter = '\n', dtype = str, comments = '#'),
-            'ca1':np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ripples.list'), delimiter = '\n', dtype = str, comments = '#'),            
+            'psb':np.genfromtxt(os.path.join(data_directory,'datasets_LMN_PSB.list'), delimiter = '\n', dtype = str, comments = '#'),            
             }
 
 ufo_channels = np.genfromtxt(os.path.join(data_directory, 'channels_UFO.txt'), delimiter = ' ', dtype = str, comments = '#')
@@ -46,7 +47,7 @@ mean_spect = {g:{} for g in datasets.keys()}
 for g in datasets.keys():
 # for g in ['ca1']:
 
-    for s in datasets[g][0:1]:
+    for s in datasets[g]:
 
         print(s)
         ############################################################################################### 
@@ -74,62 +75,96 @@ for g in datasets.keys():
             else:
                 sign_channels = channels[np.unique(spikes.getby_category("location")[g].get_info("group"))[0]]
 
-            filename = data.basename + ".dat"    
+            filename = data.basename + ".dat"
                     
             fp, timestep = get_memory_map(os.path.join(data.path, filename), data.nChannels)            
 
             fs = 20000.0
             dt = 1/fs
             w = 5.
-            freq = np.linspace(100, 2000, 100)
+            # freq = np.linspace(100, 2000, 100)
+            freq = np.geomspace(100, 2000, 200)
             widths = w*fs / (2*freq*np.pi)
             windowsize = 0.05
-            N = int(windowsize/dt)            
+            N = int(windowsize/dt)*2          
             pwr = np.zeros((len(freq),N))
+            count = 0.0
 
-            batch_size = 2**21
-            start_batch = np.arange(0, len(fp), batch_size)
-            count = 0
+            #############################
+            st = np.searchsorted(timestep, ufo_ts.t)
+            st = st[st>N//2]
+            st = st[st<len(timestep)-N//2-1]
 
-            for i, c in enumerate(sign_channels):
+            def func(args):                
+                channel, lfp, freq, N, sign_channels, windowsize, dt, widths, w = args
+                pwr2 = np.zeros((len(freq),N))
+                count2 = 0.0
+                cwtm = signal.cwt(lfp, signal.morlet2, widths, w=w)
+                tmp = np.abs(cwtm)
+                tmp /= tmp.sum(1)[:,np.newaxis]
+                return tmp
 
-                for j, st in enumerate(start_batch[0:5]):
-                    cwtm = signal.cwt(fp[st:st+batch_size,c], signal.morlet2, widths, w=w)
+            n_core = len(sign_channels)            
+            p = Pool(n_core)
 
-                    ts = ufo_ts.t[np.searchsorted(ufo_ts.t, timestep[st+N]):np.searchsorted(ufo_ts.t, timestep[np.minimum(st+batch_size-N,len(timestep)-N)])]
-                    for k,t in enumerate(ts):
-                        print(i/len(sign_channels),j/len(start_batch),k/len(ts), end="\r", flush=True)
-                        idx = np.searchsorted(timestep[st:st+batch_size], t)
-                        
-                        tmp = np.abs(cwtm[:,idx-N//2:idx+N//2])
-                        tmp /= tmp.sum(1)[:,np.newaxis]
-                        pwr += tmp
-                        count += 1
+            for i, t in enumerate(st):
+          
+                print(s, 100*i/len(ufo_ts))
+
+                items = []
+                lfp = fp[t-N//2:t+N//2,:]
+                for j, c in enumerate(sign_channels):                    
+                    items.append((c, np.array(lfp[:,c]), freq, N, sign_channels, windowsize, dt, widths, w))
+
+                tmp = p.map_async(func, items).get()
+
+                pwr += np.sum(np.array(tmp), 0)
+                count += len(sign_channels)
+                # sys.exit()
+                # for j, c in enumerate(sign_channels):
+                
+                #     cwtm = signal.cwt(fp[st-int(windowsize/dt):st+int(windowsize/dt),c], signal.morlet2, widths, w=w)
+                #     tmp = np.abs(cwtm)
+                #     tmp /= tmp.sum(1)[:,np.newaxis]
+                #     pwr += tmp
+                #     count += 1.0
                 
             pwr = pwr/count
 
-            logfreq = np.geomspace(freq.min(), freq.max(), 30)
-            freq_idx = np.digitize(freq, logfreq)-1
-            logpwr = np.zeros((len(logfreq),pwr.shape[1]))
+            # sys.exit()
 
-            for k in range(len(logfreq)):
-                logpwr[k] = pwr[freq_idx==k].mean(0)
+            # logfreq = np.geomspace(freq.min(), freq.max(), 30)
+            # freq_idx = np.digitize(freq, logfreq)-1
+            # logpwr = np.zeros((len(logfreq),pwr.shape[1]))
 
+            # for k in range(len(logfreq)):
+            #     logpwr[k] = pwr[freq_idx==k].mean(0)
 
-            mean_spect[g][s.split("/")[-1]] = logpwr
+            # sys.exit()
+
+            mean_spect[g][s.split("/")[-1]] = pwr
 
 t = np.arange(0, N)*dt - (N//2)*dt
 
 spect = {g:np.array([mean_spect[g][s] for s in mean_spect[g].keys()]).mean(0) for g in mean_spect}
 
 
-figure(figsize=(20,4))
+figure(figsize=(20,10))
+gs = GridSpec(2,3)
 for i, g in enumerate(spect.keys()):
-    subplot(1,4,i+1)
+    subplot(gs[0,i])
     imshow(spect[g], aspect='auto', origin='lower')
     title(g)
-    yticks(np.arange(0, len(logfreq), 3), logfreq.astype("int")[::3])
+    # yticks(np.arange(0, len(logfreq), 3), logfreq.astype("int")[::3])
+    yticks(np.arange(0, len(freq), 20), freq.astype("int")[::20])
     xticks(np.arange(0, N, 200), (t[np.arange(0, N, 200)]*1000).astype("int"))
     xlabel("Time (ms)")
     ylabel("Frequency")
-show()
+
+    subplot(gs[1,i])
+    semilogx(freq, spect[g][:,1000])        
+    xlabel("Frequency")
+
+tight_layout()
+savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/UFO_SPECTROGRAM.png"))
+

@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-01-18 16:29:16
+# @Last Modified time: 2024-01-27 17:11:38
 
 import numpy as np
 import pandas as pd
@@ -78,7 +78,8 @@ for s in datasets:
                 
         fp, timestep = get_memory_map(os.path.join(data.path, filename), data.nChannels)
         
-        ufo_ep, ufo_tsd = detect_ufos(fp, sign_channels, ctrl_channels, timestep)
+        # sys.exit()
+        ufo_ep, ufo_tsd = detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep)
         
         # Saving with pynapple
         ufo_ep.save(os.path.join(path, data.basename + '_ufo_ep'))
