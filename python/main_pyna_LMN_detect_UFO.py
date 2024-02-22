@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-01-27 17:11:38
+# @Last Modified time: 2024-02-15 15:52:11
 
 import numpy as np
 import pandas as pd
@@ -75,11 +75,18 @@ for s in datasets:
         sign_channels = channels[ufo_channels[s][0]]
         ctrl_channels = channels[ufo_channels[s][1]]
         filename = data.basename + ".dat"    
+
+        # get spike time and clu from res/clu
+        clu = np.genfromtxt(os.path.join(path, s.split("/")[-1]+".clu."+str(ufo_channels[s][0])), dtype="int")[1:]
+        res = np.genfromtxt(os.path.join(path, s.split("/")[-1]+".res."+str(ufo_channels[s][0])))
+
                 
         fp, timestep = get_memory_map(os.path.join(data.path, filename), data.nChannels)
         
-        # sys.exit()
-        ufo_ep, ufo_tsd = detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep)
+        sys.exit()
+
+
+        ufo_ep, ufo_tsd = detect_ufos_v3(fp, sign_channels, ctrl_channels, timestep, clu, res)
         
         # Saving with pynapple
         ufo_ep.save(os.path.join(path, data.basename + '_ufo_ep'))
