@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-05-09 14:15:58
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-02-15 17:29:32
+# @Last Modified time: 2024-03-21 15:53:03
 import numpy as np
 from numba import jit
 import pandas as pd
@@ -133,8 +133,8 @@ def detect_ufos(fp, sign_channels, ctrl_channels, timestep):
 def detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep):
     frequency = 20000
     freq_band = (500, 1000)
-    thres_band = (2, 100)
-    wsize = 201
+    thres_band = (1, 100)
+    wsize = 101
     duration_band = (2, 40)
     min_inter_duration = 5
     
@@ -197,13 +197,13 @@ def detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep):
 
             # Round 3 : Merging oscillation if inter-oscillation period is too short
             osc_ep = osc_ep.merge_close_intervals(min_inter_duration, time_units = 'ms')
-            osc_ep = osc_ep.reset_index(drop=True)
+            # osc_ep = osc_ep.reset_index(drop=True)
 
             # Extracting Oscillation peak
             osc_max = []
             osc_tsd = []
-            for i in osc_ep.index.values:
-                tmp = nSS.restrict(osc_ep.loc[[i]])
+            for i in osc_ep.index:
+                tmp = nSS.restrict(osc_ep[i])
                 osc_tsd.append(tmp.index[np.argmax(tmp)])
                 osc_max.append(np.max(tmp))
 
@@ -255,7 +255,10 @@ def detect_ufos_v3(fp, sign_channels, ctrl_channels, timestep, clu, res):
 
 
             tsg = nap.Tsd(t=res[res<s+batch_size]/20000, d=clu[res<s+batch_size]).to_tsgroup()
-            nap.compute_event_trigger_average(tsg, signal, 1/20000, (-0.001, 0.002))
+            wavef = nap.compute_event_trigger_average(tsg, signal, 1/20000, (-0.001, 0.002))
+
+            for c, t in enumerate(clu):
+                pass
 
 
             power = np.abs(hilbert(signal.d))
@@ -298,7 +301,7 @@ def detect_ufos_v3(fp, sign_channels, ctrl_channels, timestep, clu, res):
 
             # Round 3 : Merging oscillation if inter-oscillation period is too short
             osc_ep = osc_ep.merge_close_intervals(min_inter_duration, time_units = 'ms')
-            osc_ep = osc_ep.reset_index(drop=True)
+            # osc_ep = osc_ep.reset_index(drop=True)
 
             # Extracting Oscillation peak
             osc_max = []
