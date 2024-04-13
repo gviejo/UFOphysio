@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-02-15 15:52:11
+# @Last Modified time: 2024-04-13 18:12:09
 
 import numpy as np
 import pandas as pd
@@ -77,15 +77,11 @@ for s in datasets:
         filename = data.basename + ".dat"    
 
         # get spike time and clu from res/clu
-        clu = np.genfromtxt(os.path.join(path, s.split("/")[-1]+".clu."+str(ufo_channels[s][0])), dtype="int")[1:]
-        res = np.genfromtxt(os.path.join(path, s.split("/")[-1]+".res."+str(ufo_channels[s][0])))
-
-                
+        clu = np.genfromtxt(os.path.join(path, s.split("/")[-1]+".clu."+str(ufo_channels[s][0]+1)), dtype="int")[1:]
+        res = np.genfromtxt(os.path.join(path, s.split("/")[-1]+".res."+str(ufo_channels[s][0]+1)), dtype="int")
+                        
         fp, timestep = get_memory_map(os.path.join(data.path, filename), data.nChannels)
-        
-        sys.exit()
-
-
+                
         ufo_ep, ufo_tsd = detect_ufos_v3(fp, sign_channels, ctrl_channels, timestep, clu, res)
         
         # Saving with pynapple
