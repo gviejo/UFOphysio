@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-05-09 14:15:58
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-04-13 18:20:02
+# @Last Modified time: 2024-05-01 14:19:33
 import numpy as np
 from numba import jit
 import pandas as pd
@@ -132,8 +132,8 @@ def detect_ufos(fp, sign_channels, ctrl_channels, timestep):
 
 def detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep):
     frequency = 20000
-    freq_band = (500, 1000)
-    thres_band = (1, 100)
+    freq_band = (500, 1500)
+    thres_band = (3, 100)
     wsize = 101
     duration_band = (2, 40)
     min_inter_duration = 5
@@ -225,10 +225,10 @@ def detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep):
 
 def detect_ufos_v3(fp, sign_channels, ctrl_channels, timestep, clu, res):
     frequency = 20000
-    freq_band = (500, 2000)
+    freq_band = (600, 2000)
     thres_band = (3, 100)
     wsize = 101
-    duration_band = (2, 20)
+    duration_band = (2, 30)
     min_inter_duration = 5
     
     batch_size = frequency*600
@@ -374,11 +374,56 @@ def loadRipples(path):
     return (nap.IntervalSet(ripples[:,0], ripples[:,2], time_units = 's'), 
             nap.Ts(ripples[:,1], time_units = 's'))
 
+def compute_meanNSS(fp, sign_channels, ctrl_channels, timestep):
+    frequency = 20000
+    freq_band = (500, 1500)
+    wsize = 101
+    
+    batch_size = frequency*5000
 
+
+    starts = np.arange(0, len(timestep), batch_size)
+
+    allnSS = []
+
+    for i,s in enumerate(starts):
+
+        meannSS = np.zeros(np.minimum(batch_size,len(timestep)-s))
+        for j, c in enumerate(sign_channels):
+            print(i/len(starts),j/len(sign_channels), end="\r", flush=True)
+            lfp = nap.Tsd(t=timestep[s:s+batch_size], d = np.array(fp[s:s+batch_size,c][:]))
+            signal = pyna.eeg_processing.bandpass_filter(lfp, freq_band[0], freq_band[1], frequency)            
+            power = np.abs(hilbert(signal.d))
+            window = np.ones(wsize)/wsize
+            nSS = filtfilt(window, 1, power)
+            nSS = nSS - np.mean(nSS)
+            nSS = nSS/np.std(nSS)
+            meannSS += nSS        
+        meannSS = meannSS / len(sign_channels)        
+        
+        meanctr = np.zeros(np.minimum(batch_size,len(timestep)-s))  
+        for j, c in enumerate(ctrl_channels):
+            print(i/len(starts),j/len(ctrl_channels), end="\r", flush=True)
+            lfp = nap.Tsd(t=timestep[s:s+batch_size], d = np.array(fp[s:s+batch_size,c][:]))            
+            signal = pyna.eeg_processing.bandpass_filter(lfp, freq_band[0], freq_band[1], frequency)
+            power = np.abs(hilbert(signal.d))
+            window = np.ones(wsize)/wsize
+            nSS = filtfilt(window, 1, power)
+            nSS = nSS - np.mean(nSS)
+            nSS = nSS/np.std(nSS)
+            meanctr += nSS        
+        meanctr = meanctr / len(ctrl_channels)
+        
+        nSS = meannSS - meanctr
+        nSS = nap.Tsd(t = timestep[s:s+batch_size], d=nSS)
+
+        allnSS.append(nSS)
+        
+    return np.hstack(allnSS)
 
 # def downsample(tsd, up, down):
 #   import scipy.signal
-    
+
 #   dtsd = scipy.signal.resample_poly(tsd.values, up, down)
 #   dt = tsd.as_units('s').index.values[np.arange(0, tsd.shape[0], down)]
 #   if len(tsd.shape) == 1:     

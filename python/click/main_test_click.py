@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2024-03-21 13:21:51
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-03-21 16:02:59
+# @Last Modified time: 2024-04-26 10:48:16
 
 import numpy as np
 import pandas as pd
@@ -40,6 +40,7 @@ path = "/mnt/ceph/users/gviejo/OPTO/B3700/B3702/B3702-240313A"
 
 fp, timestep = get_memory_map(os.path.join(path, "B3702-240313A.dat"), 40)
 
+sys.exit()
 
 sign_channels = np.array([29, 19, 27, 23, 26, 28, 25, 24])
 ctrl_channels = np.array([1, 15, 0, 14, 9, 13, 10, 11])

@@ -70,6 +70,11 @@ rates = pd.DataFrame.from_dict(rates).T
 for e in iui.keys():
     iui[e] = pd.DataFrame.from_dict(iui[e])
 
+datatosave = {"rates":rates, "iui":iui}
+
+import _pickle as cPickle
+cPickle.dump(datatosave, open("/mnt/home/gviejo/Dropbox/UFOPhysio/figures/poster/fig1.pickle", 'wb'))
+
 figure(figsize = (8, 6))
 rcParams.update({'font.size': 20})
 
@@ -98,4 +103,6 @@ for i, e in enumerate(iui.keys()):
 tight_layout()
 
 savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/IUI_UFO.png"))
+
 show()
+

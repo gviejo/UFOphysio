@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-04-13 18:12:09
+# @Last Modified time: 2024-05-02 10:29:59
 
 import numpy as np
 import pandas as pd
@@ -40,8 +40,8 @@ ufo_channels = {a[0]:a[1:].astype('int') for a in ufo_channels}
 
 
 # 53 1 73
-for s in datasets:
-# for s in ['LMN-PSB/A3010/A3010-210324A']:
+# for s in datasets:
+for s in ['LMN-ADN/A5044/A5044-240402A']:
     print(s)
     ############################################################################################### 
     # LOADING DATA
@@ -76,13 +76,18 @@ for s in datasets:
         ctrl_channels = channels[ufo_channels[s][1]]
         filename = data.basename + ".dat"    
 
-        # get spike time and clu from res/clu
-        clu = np.genfromtxt(os.path.join(path, s.split("/")[-1]+".clu."+str(ufo_channels[s][0]+1)), dtype="int")[1:]
-        res = np.genfromtxt(os.path.join(path, s.split("/")[-1]+".res."+str(ufo_channels[s][0]+1)), dtype="int")
-                        
+        # # get spike time and clu from res/clu
+        # clu = np.genfromtxt(os.path.join(path, s.split("/")[-1]+".clu."+str(ufo_channels[s][0]+1)), dtype="int")[1:]
+        # res = np.genfromtxt(os.path.join(path, s.split("/")[-1]+".res."+str(ufo_channels[s][0]+1)), dtype="int")
+
         fp, timestep = get_memory_map(os.path.join(data.path, filename), data.nChannels)
                 
-        ufo_ep, ufo_tsd = detect_ufos_v3(fp, sign_channels, ctrl_channels, timestep, clu, res)
+        # ufo_ep, ufo_tsd = detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep)
+        
+        nSS = compute_meanNSS(fp, sign_channels, ctrl_channels, timestep)
+        nSS = nSS.bin_average(1/5000)
+        nSS.save(os.path.join(data.path, "nSS"))
+        sys.exit()
         
         # Saving with pynapple
         ufo_ep.save(os.path.join(path, data.basename + '_ufo_ep'))
