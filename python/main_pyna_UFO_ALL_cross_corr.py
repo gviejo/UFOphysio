@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-01-19 10:34:07
+# @Last Modified time: 2024-05-12 17:21:38
 
 import numpy as np
 import pandas as pd
@@ -79,7 +79,7 @@ for r in datasets.keys():
                 cc.columns = names
                 ccs_long[r][e].append(cc)
 
-                cc = nap.compute_eventcorrelogram(spikes, ufo_ts, 0.0005, 0.015, ep, norm=True)
+                cc = nap.compute_eventcorrelogram(spikes, ufo_ts, 0.001, 0.015, ep, norm=True)
                 cc.columns = names
                 ccs_short[r][e].append(cc)
 
@@ -117,9 +117,10 @@ for i, r in enumerate(['lmn', 'adn', 'psb']):
 for j, e in enumerate(ccs_long[r].keys()):
     subplot(gs[-1,j])
     for i, r in enumerate(['lmn', 'adn', 'psb']):
-        plot(ccs_long[r][e].mean(1), color = colors[i], linewidth=lw)
+        plot(ccs_long[r][e].mean(1), color = colors[i], linewidth=lw, label=r)
     axvline(0.0)
     xlim(x[0], x[-1])
+    legend()
 tight_layout()
 savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/ALL_CC_UFO_Long.png"))
 
@@ -146,9 +147,10 @@ for i, r in enumerate(['lmn', 'adn', 'psb']):
 for j, e in enumerate(ccs_short[r].keys()):
     subplot(gs[-1,j])
     for i, r in enumerate(['lmn', 'adn', 'psb']):
-        plot(ccs_short[r][e].mean(1), color = colors[i], linewidth=lw)
+        plot(ccs_short[r][e].mean(1), color = colors[i], linewidth=lw, label=r)
     axvline(0.0)
     xlim(x[0], x[-1])
+    legend()
 
 tight_layout()
 

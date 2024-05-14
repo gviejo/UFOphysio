@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2024-05-01 14:35:04
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-08 12:37:57
+# @Last Modified time: 2024-05-13 10:09:56
 
 import numpy as np
 import pandas as pd
@@ -132,7 +132,7 @@ eeg = nap.TsdFrame(t=timestep, d=fp)
 fp, timestep = get_memory_map(os.path.join(data.path, data.basename+".dat"), data.nChannels, 20000)
 lfp = nap.TsdFrame(t=timestep, d=fp)
 
-nSS = nap.load_file(os.path.join(data.path, "nSS.npz"))
+nSS = nap.load_file(os.path.join(data.path, "nSS_LMN.npz"))
 
 channels = data.group_to_channel
 
@@ -335,7 +335,7 @@ for j in range(2):
     
 subplot(gs_lfp_2[2,0])
 simpleaxis(gca())
-plot(nSS.get(t-0.02, t+0.04), color = 'black', linewidth=0.5, label="600-2000 Hz")
+plot(nSS.get(t-0.02, t+0.04), color = colors["LMN"], linewidth=0.5, label="600-2000 Hz")
 xlim(t-0.02, t+0.04)
 gca().spines['bottom'].set_bounds(t+0.03, t+0.04)
 xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["10 ms"])

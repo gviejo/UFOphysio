@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-05-09 14:15:58
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-01 14:19:33
+# @Last Modified time: 2024-05-13 12:25:25
 import numpy as np
 from numba import jit
 import pandas as pd
@@ -36,6 +36,87 @@ def get_memory_map(filepath, nChannels, frequency=20000):
 
     return fp, timestep
 
+def compute_meanNSS(fp, sign_channels, ctrl_channels, timestep):
+
+    frequency = 20000
+    freq_band = (500, 1000)
+    wsize = 41
+
+    # # tocut = np.searchsorted(timestep, [t-1, t+1])
+    # # fp = fp[tocut[0]:tocut[1]]
+    # # timestep = timestep[tocut[0]:tocut[1]]
+
+
+    # window = np.ones(wsize)/wsize
+
+    # meanpower = np.zeros(len(fp))
+    # for j, c in enumerate(sign_channels):        
+    #     lfp = nap.Tsd(t=timestep, d = np.array(fp[:,c][:]))
+    #     signal = pyna.eeg_processing.bandpass_filter(lfp, freq_band[0], freq_band[1], frequency)
+    #     power = np.abs(hilbert(signal.d))        
+    #     filt_power = filtfilt(window, 1, power)
+    #     meanpower+=filt_power
+    # meanpower /= len(sign_channels)
+
+    # meanctr = np.zeros(len(lfp))
+    # for j, c in enumerate(ctrl_channels):
+    #     lfp = nap.Tsd(t=timestep, d = np.array(fp[:,c][:]))        
+    #     signal = pyna.eeg_processing.bandpass_filter(lfp, freq_band[0], freq_band[1], frequency)
+    #     power = np.abs(hilbert(signal.d))
+    #     filt_power = filtfilt(window, 1, power)
+    #     meanctr += filt_power
+    # meanctr /= len(ctrl_channels)
+
+    # SS = meanpower - meanctr
+    # nSS = (SS - np.mean(SS))/np.std(SS)
+
+
+    # ax = subplot(211)
+    # plot(meanpower)
+    # plot(meanctr)
+    # subplot(212, sharex=ax)
+    # plot(nSS)
+    # show()
+
+    
+    batch_size = frequency*36000
+
+    starts = np.arange(0, len(timestep), batch_size)
+
+    allnSS = []
+
+    for i,s in enumerate(starts):
+
+        meanSS = np.zeros(np.minimum(batch_size,len(timestep)-s))
+        for j, c in enumerate(sign_channels):
+            print(i/len(starts),j/len(sign_channels), end="\r", flush=True)
+            lfp = nap.Tsd(t=timestep[s:s+batch_size], d = np.array(fp[s:s+batch_size,c][:]))
+            signal = pyna.eeg_processing.bandpass_filter(lfp, freq_band[0], freq_band[1], frequency)            
+            power = np.abs(hilbert(signal.d))
+            window = np.ones(wsize)/wsize            
+            SS = filtfilt(window, 1, power)
+            meanSS += SS 
+        meanSS = meanSS / len(sign_channels)        
+        
+        meanctr = np.zeros(np.minimum(batch_size,len(timestep)-s))  
+        for j, c in enumerate(ctrl_channels):
+            print(i/len(starts),j/len(ctrl_channels), end="\r", flush=True)
+            lfp = nap.Tsd(t=timestep[s:s+batch_size], d = np.array(fp[s:s+batch_size,c][:]))            
+            signal = pyna.eeg_processing.bandpass_filter(lfp, freq_band[0], freq_band[1], frequency)
+            power = np.abs(hilbert(signal.d))
+            window = np.ones(wsize)/wsize
+            SS = filtfilt(window, 1, power)
+            meanctr += SS
+        meanctr = meanctr / len(ctrl_channels)
+        
+        SS = meanSS - meanctr
+        nSS = (SS - np.mean(SS))/np.std(SS)
+
+        nSS = nap.Tsd(t = timestep[s:s+batch_size], d=nSS)
+
+        allnSS.append(nSS)
+        
+    return np.hstack(allnSS)
 
 def detect_ufos(fp, sign_channels, ctrl_channels, timestep):
     frequency = 20000
@@ -131,97 +212,54 @@ def detect_ufos(fp, sign_channels, ctrl_channels, timestep):
     return ufo_ep, ufo_tsd
 
 def detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep):
-    frequency = 20000
-    freq_band = (500, 1500)
-    thres_band = (3, 100)
-    wsize = 101
-    duration_band = (2, 40)
-    min_inter_duration = 5
+
+    nSS = compute_meanNSS(fp, sign_channels, ctrl_channels, timestep)
+
+    thres_band = (3, 100)    
+    duration_band = (2, 30)
+    min_inter_duration = 1
     
-    batch_size = frequency*500
 
     ufo_tsd = []
     ufo_ep = []
 
-    starts = np.arange(0, len(timestep), batch_size)
+    # Round1 : Detecting Oscillation Periods by thresholding normalized signal
+    try:
+        nSS2 = nSS.threshold(thres_band[0], method='above')
+    except:
+        nSS2 = None
 
-    # controls = np.array(list(set(np.arange(fp.shape[1])) - set(channels)))
-    # controls = np.random.choice(controls, len(channels), replace=False)
+    if nSS2 is not None:
+        nSS3 = nSS2.threshold(thres_band[1], method='below')
 
-    # idx = np.logical_and(timestep > ep.loc[0, "start"], timestep<ep.loc[0,"end"])
+        # Round 2 : Excluding oscillation whose length < min_duration and greater than max_duration
+        osc_ep = nSS3.time_support
+        osc_ep = osc_ep.drop_short_intervals(duration_band[0], time_units = 'ms')
+        osc_ep = osc_ep.drop_long_intervals(duration_band[1], time_units = 'ms')
 
-    for i,s in enumerate(starts):
+        # Round 3 : Merging oscillation if inter-oscillation period is too short
+        osc_ep = osc_ep.merge_close_intervals(min_inter_duration, time_units = 'ms')
+        # osc_ep = osc_ep.reset_index(drop=True)
 
-        meannSS = np.zeros(np.minimum(batch_size,len(timestep)-s))
-        for j, c in enumerate(sign_channels):
-            print(i/len(starts),j/len(sign_channels), end="\r", flush=True)
-            lfp = nap.Tsd(t=timestep[s:s+batch_size], d = np.array(fp[s:s+batch_size,c][:]))
-            signal = pyna.eeg_processing.bandpass_filter(lfp, freq_band[0], freq_band[1], frequency)            
-            power = np.abs(hilbert(signal.d))
-            window = np.ones(wsize)/wsize
-            nSS = filtfilt(window, 1, power)
-            nSS = nSS - np.mean(nSS)
-            nSS = nSS/np.std(nSS)
-            meannSS += nSS        
-        meannSS = meannSS / len(sign_channels)        
-        
-        meanctr = np.zeros(np.minimum(batch_size,len(timestep)-s))  
-        for j, c in enumerate(ctrl_channels):
-            print(i/len(starts),j/len(ctrl_channels), end="\r", flush=True)
-            lfp = nap.Tsd(t=timestep[s:s+batch_size], d = np.array(fp[s:s+batch_size,c][:]))            
-            signal = pyna.eeg_processing.bandpass_filter(lfp, freq_band[0], freq_band[1], frequency)
-            power = np.abs(hilbert(signal.d))
-            window = np.ones(wsize)/wsize
-            nSS = filtfilt(window, 1, power)
-            nSS = nSS - np.mean(nSS)
-            nSS = nSS/np.std(nSS)
-            meanctr += nSS        
-        meanctr = meanctr / len(ctrl_channels)
-        
-        nSS = meannSS - meanctr
-        nSS = nap.Tsd(t = timestep[s:s+batch_size], d=nSS)
+        # Extracting Oscillation peak
+        osc_max = []
+        osc_tsd = []
+        for i in osc_ep.index:
+            tmp = nSS.restrict(osc_ep[i])
+            osc_tsd.append(tmp.index[np.argmax(tmp)])
+            osc_max.append(np.max(tmp))
 
-        # Round1 : Detecting Oscillation Periods by thresholding normalized signal
-        try:
-            nSS2 = nSS.threshold(thres_band[0], method='above')
-        except:
-            nSS2 = None
+        osc_max = np.array(osc_max)
+        osc_tsd = np.array(osc_tsd)
 
-        if nSS2 is not None:
-            nSS3 = nSS2.threshold(thres_band[1], method='below')
+        osc_tsd = nap.Tsd(t=osc_tsd, d=osc_max)
 
-            # Round 2 : Excluding oscillation whose length < min_duration and greater than max_duration
-            osc_ep = nSS3.time_support
-            osc_ep = osc_ep.drop_short_intervals(duration_band[0], time_units = 'ms')
-            osc_ep = osc_ep.drop_long_intervals(duration_band[1], time_units = 'ms')
+        ufo_tsd = osc_tsd
+        ufo_ep =osc_ep
 
-            # Round 3 : Merging oscillation if inter-oscillation period is too short
-            osc_ep = osc_ep.merge_close_intervals(min_inter_duration, time_units = 'ms')
-            # osc_ep = osc_ep.reset_index(drop=True)
-
-            # Extracting Oscillation peak
-            osc_max = []
-            osc_tsd = []
-            for i in osc_ep.index:
-                tmp = nSS.restrict(osc_ep[i])
-                osc_tsd.append(tmp.index[np.argmax(tmp)])
-                osc_max.append(np.max(tmp))
-
-            osc_max = np.array(osc_max)
-            osc_tsd = np.array(osc_tsd)
-
-            osc_tsd = pd.Series(index=osc_tsd, data=osc_max)
-
-            ufo_tsd.append(osc_tsd)
-            ufo_ep.append(osc_ep.as_units('s'))
-
-    ufo_tsd = pd.concat(ufo_tsd)
-    ufo_tsd = nap.Tsd(ufo_tsd)
-
-    ufo_ep = pd.concat(ufo_ep)
-    ufo_ep = nap.IntervalSet(ufo_ep)
-
-    return ufo_ep, ufo_tsd
+        return ufo_ep, ufo_tsd, nSS
+    else:
+        return nap.IntervalSet([], []), nap.Tsd([], []), nSS
 
 def detect_ufos_v3(fp, sign_channels, ctrl_channels, timestep, clu, res):
     frequency = 20000
@@ -374,52 +412,7 @@ def loadRipples(path):
     return (nap.IntervalSet(ripples[:,0], ripples[:,2], time_units = 's'), 
             nap.Ts(ripples[:,1], time_units = 's'))
 
-def compute_meanNSS(fp, sign_channels, ctrl_channels, timestep):
-    frequency = 20000
-    freq_band = (500, 1500)
-    wsize = 101
-    
-    batch_size = frequency*5000
 
-
-    starts = np.arange(0, len(timestep), batch_size)
-
-    allnSS = []
-
-    for i,s in enumerate(starts):
-
-        meannSS = np.zeros(np.minimum(batch_size,len(timestep)-s))
-        for j, c in enumerate(sign_channels):
-            print(i/len(starts),j/len(sign_channels), end="\r", flush=True)
-            lfp = nap.Tsd(t=timestep[s:s+batch_size], d = np.array(fp[s:s+batch_size,c][:]))
-            signal = pyna.eeg_processing.bandpass_filter(lfp, freq_band[0], freq_band[1], frequency)            
-            power = np.abs(hilbert(signal.d))
-            window = np.ones(wsize)/wsize
-            nSS = filtfilt(window, 1, power)
-            nSS = nSS - np.mean(nSS)
-            nSS = nSS/np.std(nSS)
-            meannSS += nSS        
-        meannSS = meannSS / len(sign_channels)        
-        
-        meanctr = np.zeros(np.minimum(batch_size,len(timestep)-s))  
-        for j, c in enumerate(ctrl_channels):
-            print(i/len(starts),j/len(ctrl_channels), end="\r", flush=True)
-            lfp = nap.Tsd(t=timestep[s:s+batch_size], d = np.array(fp[s:s+batch_size,c][:]))            
-            signal = pyna.eeg_processing.bandpass_filter(lfp, freq_band[0], freq_band[1], frequency)
-            power = np.abs(hilbert(signal.d))
-            window = np.ones(wsize)/wsize
-            nSS = filtfilt(window, 1, power)
-            nSS = nSS - np.mean(nSS)
-            nSS = nSS/np.std(nSS)
-            meanctr += nSS        
-        meanctr = meanctr / len(ctrl_channels)
-        
-        nSS = meannSS - meanctr
-        nSS = nap.Tsd(t = timestep[s:s+batch_size], d=nSS)
-
-        allnSS.append(nSS)
-        
-    return np.hstack(allnSS)
 
 # def downsample(tsd, up, down):
 #   import scipy.signal
