@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-05-09 14:15:58
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-13 12:25:25
+# @Last Modified time: 2024-05-14 19:10:04
 import numpy as np
 from numba import jit
 import pandas as pd
@@ -79,7 +79,7 @@ def compute_meanNSS(fp, sign_channels, ctrl_channels, timestep):
     # show()
 
     
-    batch_size = frequency*36000
+    batch_size = frequency*8000
 
     starts = np.arange(0, len(timestep), batch_size)
 

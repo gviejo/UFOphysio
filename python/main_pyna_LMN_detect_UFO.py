@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-13 12:24:40
+# @Last Modified time: 2024-05-22 10:29:20
 
 import numpy as np
 import pandas as pd
@@ -39,8 +39,7 @@ ufo_channels = np.genfromtxt(os.path.join(data_directory, 'channels_UFO.txt'), d
 ufo_channels = {a[0]:a[1:].astype('int') for a in ufo_channels}
 
 
-# 53 1 73
-for s in datasets:
+for s in datasets[-2:]:
 # for s in ['LMN-ADN/A5044/A5044-240402A']:
     print(s)
     ############################################################################################### 
