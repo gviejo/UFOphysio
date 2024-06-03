@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2024-05-01 14:35:04
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-23 16:43:24
+# @Last Modified time: 2024-05-25 15:57:20
 
 import numpy as np
 import pandas as pd
@@ -177,7 +177,7 @@ fig = figure(figsize=figsize(0.9))
 
 outergs = GridSpec(2, 1, figure=fig, height_ratios=[0.6, 0.2], hspace=0.2)
 
-gs0 = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=outergs[0, 0], width_ratios=[0.4, 0.1, 0.5])
+gs0 = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=outergs[0, 0], width_ratios=[0.4, 0.03, 0.5])
 
 #####################################
 # HISTO 
@@ -207,7 +207,7 @@ for i, f in enumerate(files):
 #####################################
 # LFP SWS Examples
 
-gs_lfp_2 = gridspec.GridSpecFromSubplotSpec(3, 1, subplot_spec=gs0[0,2])
+gs_lfp_2 = gridspec.GridSpecFromSubplotSpec(4, 1, subplot_spec=gs0[0,2], height_ratios=[0.2, 0.2, 0.1, 0.2])
 
 chs = [0, 6]
 yls = ['ADN', 'LMN']
@@ -228,28 +228,41 @@ for j in range(2):
     xlim(t-0.02, t+0.04)
     ylabel(yls[j], rotation=0, y=0.3, labelpad=15)
     
+# Power
 subplot(gs_lfp_2[2,0])
 simpleaxis(gca())
-plot(nSS.get(t-0.02, t+0.04), color = colors["LMN"], linewidth=0.5, label="600-2000 Hz")
-
-from scipy.signal import stft
-
-tmp = lfp.get(t-0.02, t+0.04).sum(1)
-f, t, Zxx = stft(tmp, 20000)
-
-pcolormesh(t, f, np.abs(Zxx), shading='gouraud')
-
+plot(nSS.get(t-0.02, t+0.04), color = colors["LMN"], linewidth=0.8, label="600-2000 Hz")
 xlim(t-0.02, t+0.04)
-gca().spines['bottom'].set_bounds(t+0.03, t+0.04)
-xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["10 ms"])
+gca().spines['bottom'].set_bounds(t+0.04, t+0.04)
+# xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["10 ms"])
+xticks([])
 ylabel("Power\n(z)", rotation=0, labelpad=25, y=0.4)
 axhline(3.0, linewidth=0.5, color=COLOR, linestyle="--")
 # legend(frameon=False, bbox_to_anchor=(0, -1), handlelength=0.0, loc=3)
 
+# Time Frequency decomposition
+subplot(gs_lfp_2[3,0])
+simpleaxis(gca())
+A = nap.load_file(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/"+name.split("/")[-1]+"_TDF_Ex.npz"))
+freq = A.columns.astype("int")
+idx = (freq>50) & (freq < 1500)
+freq2 = freq[idx]
+imshow(A[:,idx].get(t-0.02, t+0.04).values.T, 
+    aspect='auto', origin='lower', extent=(t-0.02, t+0.04,float(freq2[0]),float(freq2[-1])),
+    interpolation='bilinear'
+    )
+axhline(500.0, linewidth=0.1, color='white')
+axhline(1000.0, linewidth=0.1, color='white')
+gca().spines['bottom'].set_bounds(t+0.03, t+0.04)
+xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["10 ms"])
+xlim(t-0.02, t+0.04)
+ylabel("Freq.\n(Hz)", rotation=0, labelpad=15, y=0.4)
+# axhline(3.0, linewidth=0.5, color=COLOR, linestyle="--")
+# legend(frameon=False, bbox_to_anchor=(0, -1), handlelength=0.0, loc=3)
 
 
 ###########################################
-gs1 = gridspec.GridSpecFromSubplotSpec(1, 4, subplot_spec=outergs[1, 0], width_ratios=[0.3, 0.1, 0.2, 0.4], hspace=0.3)
+gs1 = gridspec.GridSpecFromSubplotSpec(1, 4, subplot_spec=outergs[1, 0], width_ratios=[0.4, 0.01, 0.2, 0.4], hspace=0.1)
 
 #####################################
 # TUNING CURVES
@@ -259,7 +272,7 @@ gs_tc = gridspec.GridSpecFromSubplotSpec(
     width_ratios = [0.1, 0.3, 0.2], 
     height_ratios = [0.0, 0.2, 0.2, 0.0], 
     hspace=0.7,
-    wspace=0.7
+    wspace=0.4
 )
 
 for i, st in enumerate(["ADN", "LMN"]):
@@ -303,61 +316,7 @@ for i, st in enumerate(["ADN", "LMN"]):
     yticks([])
 
 
-# #####################################
-# # LFP SWS
-# #####################################
-# # gs_lfp = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs0[0,1], hspace=0.4, wspace=0.0, height_ratios=[0.4,0.6])
 
-# gs_lfp_1 = gridspec.GridSpecFromSubplotSpec(7, 3, subplot_spec=gs1[0,0], hspace=0.0, wspace=0.1, height_ratios=[0.015, 0.1, 0.1, 0.015, 0.1, 0.1, 0.1], width_ratios=[0.2, 0.1, 0.1])
-
-# eps = [sws_ex, wak_ex, rem_ex]
-# names = ["NREM", "Wakefulness", "REM"]
-# ypos = [1, 2, 4, 5]
-# shanks = ["0", "1", "4", "5"]
-
-# ts = [ts_ex, ts_wak, ts_rem]
-
-
-# for i, ep in enumerate(eps):
-#     for j, ch in enumerate([0, 2, 6, 5]):
-#         subplot(gs_lfp_1[ypos[j],i])
-#         noaxis(gca())
-#         tmp = eeg.restrict(ep)
-#         [plot((tmp[:,c]-k*1000)*1, linewidth=lws[j], color=colors[structs[j]], alpha=alphas[j]) for k, c in enumerate(channels[ch])]
-
-#         xlim(ep[0,0], ep[0,1])
-
-#         if j == 3:
-#             if i == 0:
-#                 gca().spines['bottom'].set_visible("True")
-#                 gca().spines['bottom'].set_bounds(ep.end[0]-0.4, ep.end[0])
-#                 xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["0.4 s"])
-#             if i == 1:
-#                 gca().spines['bottom'].set_visible("True")
-#                 gca().spines['bottom'].set_bounds(ep.end[0]-0.1, ep.end[0])
-#                 xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["0.1 s"])
-#             if i == 2:
-#                 gca().spines['bottom'].set_visible("True")
-#                 gca().spines['bottom'].set_bounds(ep.end[0]-0.1, ep.end[0])
-#                 xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["0.1 s"])
-#         if i == 0:
-#             ylabel(shanks[j], rotation=0, y = 0.25, labelpad=10)
-#         if i == 0 and j in [0, 2]:
-#             axvspan(ts_ex[1]-0.02, ts_ex[1]+0.04, edgecolor="black", facecolor=(0,0,0,0), linewidth=0.5)
-
-
-# for i, ep in enumerate(eps):
-#     for j in [0, 3]:
-#         subplot(gs_lfp_1[j,i])
-#         noaxis(gca())
-#         axis((ep[0,0], ep[0,1], 0 , 1))
-#         if j == 0: title(names[i])
-#         prop = dict(arrowstyle="-|>,head_width=0.1,head_length=0.2",
-#                     shrinkA=0,shrinkB=0)
-#         for k in range(len(ts[i])):
-#             annotate("", (ts[i][k], 0), (ts[i][k], 0.5), arrowprops=prop)
-#         if i == 0 and j == 0:
-#             ylabel("Shank", rotation=0)
 
 
 ######################################
@@ -418,7 +377,8 @@ outergs.update(top=0.98, bottom=0.09, right=0.98, left=0.05)
 
 
 savefig(
-    os.path.expanduser("~") + "/Dropbox/UFOPhysio/figures/poster/fig1.png",
+    os.path.expanduser("~") + r"/Dropbox/Applications/Overleaf/FENS 2024/figures/fig1.pdf",
+    # os.path.expanduser("~") + "/Dropbox/UFOPhysio/figures/poster/fig1.pdf",
     dpi=200,
     facecolor="white",
 )

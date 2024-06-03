@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2024-05-01 14:35:04
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-24 15:26:36
+# @Last Modified time: 2024-05-29 11:18:24
 
 import numpy as np
 import pandas as pd
@@ -50,7 +50,7 @@ def figsize(scale):
     golden_mean = (np.sqrt(5.0)-1.0) / 2           # Aesthetic ratio (you could change this)
     fig_width = fig_width_pt*inches_per_pt*scale    # width in inches
     # fig_width = 5
-    fig_height = fig_width*golden_mean*0.7         # height in inches
+    fig_height = fig_width*golden_mean*1         # height in inches
     fig_size = [fig_width,fig_height]
     return fig_size
 
@@ -115,7 +115,7 @@ elif os.path.exists('/mnt/ceph/users/gviejo'):
 elif os.path.exists('/media/guillaume/Raid2'):
     data_directory = '/media/guillaume/Raid2'
 
-name = 'LMN-ADN/A5044/A5044-240401B'
+name = 'LMN-ADN/A5022/A5022-210527A'
 path = os.path.join(data_directory, name)
 
 colors = {"ADN": "#EA9E8D", "LMN": "#8BA6A9", "PSB": "#CACC90", "ctrl":"grey"}
@@ -132,135 +132,63 @@ eeg = nap.TsdFrame(t=timestep, d=fp)
 fp, timestep = get_memory_map(os.path.join(data.path, data.basename+".dat"), data.nChannels, 20000)
 lfp = nap.TsdFrame(t=timestep, d=fp)
 
-aux, timestep = get_memory_map(os.path.join(data.path, data.basename+"_auxiliary.dat"), 3, 20000)
-aux = nap.TsdFrame(t=timestep, d=aux)
 
 nSS = nap.load_file(os.path.join(data.path, "nSS_LMN.npz"))
 
+
 channels = data.group_to_channel
 
-structs = ['ADN', 'LMN']
-
-exs = [
-    1983.8766,
-    1993.87705,
-    2023.87835
-]
-
-tcurves = { "ADN":nap.compute_1d_tuning_curves(data.spikes.getby_category("location")['adn'], data.position['ry'], 60, data.epochs['wake']),
-            "LMN":nap.compute_1d_tuning_curves(data.spikes.getby_category("location")['lmn'], data.position['ry'], 60, data.epochs['wake'])}
 
 
-for k in tcurves:
-    tcurves[k] = smoothAngularTuningCurves(tcurves[k], 40, 5)
-    mi = nap.compute_1d_mutual_info(tcurves[k], data.position['ry'], data.epochs['wake'])
-    tcurves[k] = tcurves[k][mi[mi>0.1].dropna().index]
 
+
+structs = ['CA1', 'LMN']
 
 ###############################################################################################################
 # PLOT
 ###############################################################################################################
 
-fig = figure(figsize=figsize(0.95))
+fig = figure(figsize=figsize(0.9))
 
-outergs = GridSpec(1, 1, figure=fig)
+outergs = GridSpec(2, 1, figure=fig, height_ratios=[0.5, 0.1], hspace=0.2)
 
-
-gs0 = gridspec.GridSpecFromSubplotSpec(1, 2, 
-    subplot_spec=outergs[0, 0], width_ratios=[0.6, 0.4])
+gs0 = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=outergs[0, 0])
 
 
-gs_lfp = gridspec.GridSpecFromSubplotSpec(3, 4, 
-    subplot_spec=gs0[0, 0], width_ratios=[0.1, 0.5, 0.5, 0.5])
+gs1 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outergs[1, 0])
 
-### LFP examples
+data = cPickle.load(open(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/CORR_UFO_SPEED.pickle"), 'rb'))
 
-chs = [0, 6]
-yls = ['ADN', 'LMN']
+eta_linv = data['eta_linv']
+eta_angv = data['eta_angv']
 
-window_size = [0.02, 0.04]
-
-for i, t in enumerate(exs):
-    
-    tmp = lfp.get(t-window_size[0], t+window_size[1])
-    
-    for j in range(2):
-        subplot(gs_lfp[j,i+1])
-        noaxis(gca())
-        [plot((tmp[:,c]-k*1000)*2, linewidth=0.5, color=colors[structs[j]]) for k, c in enumerate(channels[chs[j]])]
-        xlim(t-window_size[0], t+window_size[1])
-        if i == 0:
-            ylabel(yls[j], rotation=0, y=0.3, labelpad=15)
-        axvline(t, color = COLOR, linewidth=0.1)
-    
-    subplot(gs_lfp[2,i+1])
-    simpleaxis(gca())
-    plot(nSS.get(t-window_size[0], t+window_size[1]), color = colors["LMN"], linewidth=1, label="600-2000 Hz")
-    xlim(t-window_size[0], t+window_size[1])
-    gca().spines['bottom'].set_bounds(t+0.03, t+window_size[1])
-    xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["10 ms"])    
-    axhline(3.0, linewidth=0.1, color=COLOR, linestyle="--")    
-    axvline(t, color = COLOR, linewidth=0.1)
-    # ylim(-1, 4)
-    if i == 0:
-        legend(frameon=False, bbox_to_anchor=(-0.5, -0.75), handlelength=0.0, loc=3)
-        ylabel("Power\n(z)", rotation=0, labelpad=20, y=0.1)
-    else:
-        yticks([])
-
-    # # Accelerometer
-    # subplot(gs_lfp[3,i+1])
-    # simpleaxis(gca())    
-    # plot(aux.get(t-window_size[0], t+window_size[1]))
-    # xlim(t-window_size[0], t+window_size[1])
-    # gca().spines['bottom'].set_bounds(t+0.03, t+window_size[1])
-    # xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["10 ms"])    
-    # axvline(t, color = COLOR, linewidth=0.1)
-    # # ylim(-1, 4)
-    # if i == 0:
-    #     legend(frameon=False, bbox_to_anchor=(-0.5, -0.75), handlelength=0.0, loc=3)
-    #     ylabel("Power\n(z)", rotation=0, labelpad=20, y=0.1)
-    # else:
-    #     yticks([])
-
-
-### CCS
-gs_peth = gridspec.GridSpecFromSubplotSpec(4, 2, 
-    subplot_spec=gs0[0, 1], width_ratios=[0.05, 0.3], wspace = 1, hspace=0.3)
-
-data = cPickle.load(open(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/cc_sound.pickle"), 'rb'))
-
-peths = data['peths']
-ccs = data['ccs']
-
-
-subplot(gs_peth[1,1])
+subplot(gs1[0,0])
 simpleaxis(gca())
-gca().spines['bottom'].set_visible(False)
-for s in peths:
-    tmp = peths[s]
-    scatter(tmp.index.values, tmp.values, s=0.1, c=COLOR)
-xticks([])
-xlim(-0.03, 0.03)
-axvline(0, color = COLOR, linewidth=0.2)
-ylabel("Events", rotation=0, labelpad=20)
+tmp = eta_linv - eta_linv.mean()
+tmp = tmp / tmp.std()
+plot(tmp, color='grey', alpha=0.8, linewidth=0.8)
+plot(tmp.mean(1), linewidth=4)
+title("Linear speed")
+axvline(0.0)
+ylabel("Z")
 
-
-subplot(gs_peth[2,1])
+subplot(gs1[0,1])
 simpleaxis(gca())
-plot(ccs['sws']*100.0, color=COLOR, linewidth = 1)
-axvline(0, color = COLOR, linewidth=0.1)
-xlim(-0.03, 0.03)
-ylabel("%", rotation=0, labelpad=20)    
-xlabel("UFO/Sound (ms)")
+tmp = eta_angv - eta_angv.mean()
+tmp = tmp / tmp.std()
+plot(tmp, color='grey', alpha=0.8, linewidth=0.8)
+plot(tmp.mean(1), linewidth=4)
+title("Angular speed")
+axvline(0.0)
+ylabel("Z")
 
-xticks([-0.03, 0.0, 0.03], [-30, 0, 30])
 
-outergs.update(top=0.95, bottom=0.09, right=0.98, left=0.06)
+
+outergs.update(top=0.98, bottom=0.09, right=0.98, left=0.05)
 
 
 savefig(
-    os.path.expanduser("~") + r"/Dropbox/Applications/Overleaf/FENS 2024/figures/fig3.pdf",
+    os.path.expanduser("~") + r"/Dropbox/Applications/Overleaf/FENS 2024/figures/fig5.png",
     dpi=200,
     facecolor="white",
 )

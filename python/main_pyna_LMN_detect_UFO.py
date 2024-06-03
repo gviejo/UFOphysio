@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-22 10:29:20
+# @Last Modified time: 2024-05-30 10:49:33
 
 import numpy as np
 import pandas as pd
@@ -33,14 +33,15 @@ datasets = np.hstack([
     np.genfromtxt(os.path.join(data_directory,'datasets_LMN.list'), delimiter = '\n', dtype = str, comments = '#'),
     np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ADN.list'), delimiter = '\n', dtype = str, comments = '#'),
     np.genfromtxt(os.path.join(data_directory,'datasets_LMN_PSB.list'), delimiter = '\n', dtype = str, comments = '#'),
+    # np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ripples.list'), delimiter = '\n', dtype = str, comments = '#'),
     ])
 
 ufo_channels = np.genfromtxt(os.path.join(data_directory, 'channels_UFO.txt'), delimiter = ' ', dtype = str, comments = '#')
 ufo_channels = {a[0]:a[1:].astype('int') for a in ufo_channels}
 
 
-for s in datasets[-2:]:
-# for s in ['LMN-ADN/A5044/A5044-240402A']:
+for s in datasets:
+# for s in ['LMN/A1411/A1411-200910A']:
     print(s)
     ############################################################################################### 
     # LOADING DATA
@@ -81,18 +82,28 @@ for s in datasets[-2:]:
 
         fp, timestep = get_memory_map(os.path.join(data.path, filename), data.nChannels)
         
-        # sys.exit()
+        ufo_ep, ufo_tsd, nSS = detect_ufos_v2(fp, sign_channels[::2], ctrl_channels[::2], timestep)
         
-        ufo_ep, ufo_tsd, nSS = detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep)
         
-        # nSS = compute_meanNSS(fp, sign_channels, ctrl_channels, timestep)
-        nSS = nSS.bin_average(1/5000)
-        nSS.save(os.path.join(data.path, "nSS_LMN"))
-        
+        # Higher threshold for wake
+        from pynapple.core._core_functions import _restrict
+
+        idx = _restrict(ufo_tsd.t, wake_ep.start, wake_ep.end)
+
+        tokeep = np.ones(len(ufo_tsd), dtype=bool)
+        for i in range(len(ufo_tsd)):
+            if i in idx and ufo_tsd[i] < 7:
+                tokeep[i]=False
+
+        ufo_tsd = ufo_tsd[tokeep]
+        ufo_ep = ufo_ep[tokeep]
         
         # Saving with pynapple
         ufo_ep.save(os.path.join(path, data.basename + '_ufo_ep'))
         ufo_tsd.save(os.path.join(path, data.basename + '_ufo_tsd'))
+        nSS = nSS.bin_average(1/5000)
+        nSS.save(os.path.join(data.path, "nSS_LMN"))
+
 
         ###########################################################################################################
         # Writing for neuroscope

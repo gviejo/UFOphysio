@@ -2,7 +2,9 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-23 18:53:05
+# @Last Modified time: 2024-05-24 14:20:55
+
+#%%
 
 import numpy as np
 import pandas as pd
@@ -19,6 +21,7 @@ from ufo_detection import *
 from matplotlib.pyplot import *
 import matplotlib.pyplot as plt
 from scipy.signal import stft
+
 
 ############################################################################################### 
 # GENERAL infos
@@ -85,29 +88,58 @@ for s in ['LMN-ADN/A5044/A5044-240402A']:
 
 ts_ex = [11005.398, 11005.982]
 
-ep = nap.IntervalSet(start = ts_ex[1]-0.2, end = ts_ex[1]+0.2)
+ep = nap.IntervalSet(start = ts_ex[1]-1, end = ts_ex[1]+1)
 
-def compute_stft(lfp):
+def compute_stft(s):
     Zx = []
-    for i in range(lfp.shape[1]):
-        s = lfp[:,i]
-        s = s*np.blackman(s.size)
+    for i in range(s.shape[1]):
+        # s = S[:,i]
+        # s = s*np.blackman(s.size)
 
-        f, t, Z = stft(s, fs=20000, window="blackman", nperseg=256, noverlap=200)
+        f, t, Z = stft(s[:,i], fs=20000, window="blackman", nperseg=256, noverlap=200)
 
-        Zx.append(np.abs(Z))
+        # Zx.append(np.abs(Z))
+        Zx.append(20*np.log10(np.abs(Z)))
 
     Zx = np.array(Zx)
     Zxx = Zx.mean(0)
+
+    # freqs=np.geomspace(100, 1100, 10)
+    # idx = np.digitize(f, freqs)
+    # Zxx = np.array([Zxx[idx==i+1].mean(0) for i in range(freqs.shape[0])])
+
+    t = t + s.t[0]
     return Zxx, t, f
 
+def compute_multitaper(s):
+    from mne.time_frequency import tfr_array_multitaper
+    freqs=np.geomspace(100, 1200, 200)
+    # freqs = np.arange(100, 1000, 200)
+    Z = tfr_array_multitaper(
+        s.d.T[None,:,:], 
+        sfreq=20000, 
+        freqs=freqs, 
+        output = 'avg_power')
+    
+    return Z.mean(0), s.t, freqs
+
 lfp2 = lfp.restrict(ep)
+
+# Zx, tx, f = compute_multitaper(lfp2[:,sign_channels])
+# Cx, tx, f = compute_multitaper(lfp2[:,ctrl_channels])
+
 Zx, tx, f = compute_stft(lfp2[:,sign_channels])
 Cx, tx, f = compute_stft(lfp2[:,ctrl_channels])
 
 # t = np.arange(0, len(lfp2))*(1/20000)
 
-Ax = Zx - Cx
+Ax = Zx# - Cx
+
+
+
+Ax = nap.TsdFrame(t=tx, d=Ax.T, columns = f.astype("int").astype("str"))
+
+Ax.save(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/"+s.split("/")[-1]+"_TDF_Ex"))
 
 # axs[0].plot(t, s.d)
 # axs[0].set_xticklabels([])
@@ -116,13 +148,17 @@ Ax = Zx - Cx
 
 # *_, im = axs[1].specgram(s, Fs=20000, NFFT=256, noverlap=200, cmap='jet', mode='magnitude')
 
-idx = np.logical_and(f>100, f<1100)
-pcolormesh(tx, f[idx], Ax[idx], shading='gouraud')
-tick_params(axis='both', which='major', labelsize=16)
-grid(alpha=0.3)
-# ylim(100, 1100)
-ylabel("↑ freq [Hz]")
-xlabel("time [s] →")
+figure()
+subplot(221)
+imshow(Zx, origin='lower', aspect='auto')
+yticks(np.arange(Zx.shape[0])[::4], f[::4])
+subplot(222)
+imshow(Cx, origin='lower', aspect='auto')
+yticks(np.arange(Cx.shape[0])[::4], f[::4])
+subplot(212)
+imshow(Ax.get(ts_ex[1]-0.2, ts_ex[1]+0.2).d.T, origin='lower', aspect='auto')
+yticks(np.arange(Cx.shape[0])[::4], f[::4])
 show()
 
 
+# %%

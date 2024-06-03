@@ -2,7 +2,8 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-05-18 17:59:27
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2023-12-02 19:02:23
+# @Last Modified time: 2024-05-27 12:45:33
+# %%
 import numpy as np
 import pandas as pd
 import pynapple as nap
@@ -51,15 +52,26 @@ for s in datasets:
     if ufo_ts is not None:        
         grp = nap.TsGroup({0:ufo_ts,1:rip_ts,}, evt = np.array(['ufo', 'rip']))
 
-        ufo_cc = nap.compute_crosscorrelogram(grp, 0.5, 100, sws_ep)
+        ufo_cc = nap.compute_crosscorrelogram(grp, 0.5, 100, sws_ep, norm=True)
         cc_long[s] = ufo_cc[(0,1)]
 
-        ufo_cc = nap.compute_crosscorrelogram(grp, 0.01, 2, sws_ep)
+        ufo_cc = nap.compute_crosscorrelogram(grp, 0.01, 2, sws_ep, norm=True)
         cc_short[s] = ufo_cc[(0,1)]
 
 
 cc_long = pd.DataFrame.from_dict(cc_long)
 cc_short = pd.DataFrame.from_dict(cc_short)
+
+
+# %%
+
+ccs = {"long":cc_long, "short":cc_short}
+
+import _pickle as cPickle
+cPickle.dump(ccs, open(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/CC_UFO_SWR.pickle"), 'wb'))
+
+
+# %%
 
 cc_long = cc_long.rolling(window=20,win_type='gaussian',center=True,min_periods=1).mean(std=1)
 cc_short = cc_short.rolling(window=20,win_type='gaussian',center=True,min_periods=1).mean(std=1)
@@ -79,3 +91,5 @@ xlabel("ufo (s)")
 
 savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/Cross-corr_UFO_SWR.png"))
 show()
+
+# %%

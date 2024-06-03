@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-01-14 16:49:11
+# @Last Modified time: 2024-05-29 18:13:31
 
 import numpy as np
 import pandas as pd
@@ -43,6 +43,7 @@ ufo_vel = []
 ang_lin = []
 
 for s in datasets:
+# for s in ['LMN/A1411/A1411-200910A']:
 
     ############################################################################################### 
     # LOADING DATA
@@ -56,19 +57,23 @@ for s in datasets:
     rem_ep = data.read_neuroscope_intervals('rem')
     ufo_ep, ufo_ts = loadUFOs(path)
 
+    ufo_tsd = nap.load_file(os.path.join(path, data.basename + '_ufo_tsd.npz'))
+
+    tokeep = ufo_tsd.restrict(wake_ep).d>6
+    ufo_ts = ufo_tsd.restrict(wake_ep)[tokeep]
+
     if ufo_ts is not None:
         ufo_gr = nap.TsGroup({0:ufo_ts})
 
         ep = position[['x', 'z']].time_support.loc[[0]]
 
-        bin_size = 0.05
-
+        bin_size = 0.05        
         lin_velocity = computeLinearVelocity(position[['x', 'z']], ep, bin_size)
         lin_velocity = lin_velocity*100.0
         ang_velocity = computeAngularVelocity(position['ry'], ep, bin_size)
         ang_velocity = np.abs(ang_velocity)
 
-        lin_corr = nap.compute_event_trigger_average(ufo_gr, lin_velocity, bin_size, (-1.0, 1.0), ep)
+        lin_corr = nap.compute_event_trigger_average(ufo_gr, lin_velocity, bin_size, (-10.0, 10.0), ep)
         ang_corr = nap.compute_event_trigger_average(ufo_gr, ang_velocity, bin_size, (-1.0, 1.0), ep)
 
         eta_linv[s] = lin_corr.loc[0].as_series()
@@ -120,6 +125,13 @@ eta_angv = pd.DataFrame.from_dict(eta_angv)
 
 ufo_vel = np.array(ufo_vel)
 ang_lin = np.array(ang_lin)
+
+datatosave = {"eta_linv":eta_linv, "eta_angv":eta_angv}
+import _pickle as cPickle
+cPickle.dump(datatosave, open(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/CORR_UFO_SPEED.pickle"), 'wb'))
+
+
+
 
 figure(figsize = (8, 6))
 
