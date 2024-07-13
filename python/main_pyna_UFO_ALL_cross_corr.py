@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-12 17:21:38
+# @Last Modified time: 2024-06-05 17:16:59
 
 import numpy as np
 import pandas as pd
@@ -91,6 +91,14 @@ for r in ccs_long.keys():
     for e in ccs_long[r].keys():
         ccs_long[r][e] = pd.concat(ccs_long[r][e], 1)
         ccs_short[r][e] = pd.concat(ccs_short[r][e], 1)
+
+
+datatosave = {"ccs_long":ccs_long, "ccs_short":ccs_short}
+
+import _pickle as cPickle
+cPickle.dump(datatosave, open(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/CC_UFO_PSB.pickle"), 'wb'))
+
+
 
 rcParams.update({'font.size': 15})
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']

@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2024-05-01 14:35:04
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-25 17:30:32
+# @Last Modified time: 2024-06-18 16:26:32
 
 import numpy as np
 import pandas as pd
@@ -220,7 +220,7 @@ semilogx(bins[0:-1], pwr_ufo, color = colors['LMN'], alpha = 1, linewidth=2)
 semilogx(bins[0:-1], pwr_ctr, color = colors['ctrl'], alpha = 1, linewidth=2)
 
 
-xlabel("Power (uv^2)")
+xlabel("Power (z)")
 
 outergs.update(top=0.95, bottom=0.09, right=0.98, left=0.06)
 

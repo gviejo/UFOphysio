@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2024-05-01 14:35:04
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-25 15:57:20
+# @Last Modified time: 2024-06-18 16:32:29
 
 import numpy as np
 import pandas as pd
@@ -21,6 +21,7 @@ import matplotlib.image as mpimg
 sys.path.append("../")
 from functions import *
 import _pickle as cPickle
+from scipy.ndimage import gaussian_filter
 
 def get_memory_map(filepath, nChannels, frequency=20000):
     """Summary
@@ -207,7 +208,7 @@ for i, f in enumerate(files):
 #####################################
 # LFP SWS Examples
 
-gs_lfp_2 = gridspec.GridSpecFromSubplotSpec(4, 1, subplot_spec=gs0[0,2], height_ratios=[0.2, 0.2, 0.1, 0.2])
+gs_lfp_2 = gridspec.GridSpecFromSubplotSpec(4, 2, subplot_spec=gs0[0,2], height_ratios=[0.2, 0.2, 0.1, 0.2], width_ratios=[0.9, 0.02], wspace=0.1)
 
 chs = [0, 6]
 yls = ['ADN', 'LMN']
@@ -227,7 +228,16 @@ for j in range(2):
     [plot((tmp[:,c]-k*1000)*2, linewidth=lws[j], color=colors[structs[j]]) for k, c in enumerate(channels[chs[j]])]
     xlim(t-0.02, t+0.04)
     ylabel(yls[j], rotation=0, y=0.3, labelpad=15)
-    
+
+A = nap.load_file(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/"+name.split("/")[-1]+"_TFD_Ex.npz"))
+freq = A.columns.astype("int")
+idx = (freq>=100) & (freq <= 3000)
+freq2 = freq[idx]
+tmp = A[:,idx].get(t-0.02, t+0.04).values
+tmp = tmp - tmp.mean(0)
+tmp = tmp / tmp.std(0)
+
+
 # Power
 subplot(gs_lfp_2[2,0])
 simpleaxis(gca())
@@ -237,22 +247,18 @@ gca().spines['bottom'].set_bounds(t+0.04, t+0.04)
 # xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["10 ms"])
 xticks([])
 ylabel("Power\n(z)", rotation=0, labelpad=25, y=0.4)
-axhline(3.0, linewidth=0.5, color=COLOR, linestyle="--")
+axhline(5.0, linewidth=0.5, color=COLOR, linestyle="--")
 # legend(frameon=False, bbox_to_anchor=(0, -1), handlelength=0.0, loc=3)
 
 # Time Frequency decomposition
 subplot(gs_lfp_2[3,0])
 simpleaxis(gca())
-A = nap.load_file(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/"+name.split("/")[-1]+"_TDF_Ex.npz"))
-freq = A.columns.astype("int")
-idx = (freq>50) & (freq < 1500)
-freq2 = freq[idx]
-imshow(A[:,idx].get(t-0.02, t+0.04).values.T, 
+img = imshow(tmp.T, 
     aspect='auto', origin='lower', extent=(t-0.02, t+0.04,float(freq2[0]),float(freq2[-1])),
-    interpolation='bilinear'
+    interpolation='bilinear', cmap = "afmhot"
     )
-axhline(500.0, linewidth=0.1, color='white')
-axhline(1000.0, linewidth=0.1, color='white')
+# axhline(500.0, linewidth=0.05, color='white')
+# axhline(1000.0, linewidth=0.1, color='white')
 gca().spines['bottom'].set_bounds(t+0.03, t+0.04)
 xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["10 ms"])
 xlim(t-0.02, t+0.04)
@@ -260,6 +266,9 @@ ylabel("Freq.\n(Hz)", rotation=0, labelpad=15, y=0.4)
 # axhline(3.0, linewidth=0.5, color=COLOR, linestyle="--")
 # legend(frameon=False, bbox_to_anchor=(0, -1), handlelength=0.0, loc=3)
 
+ax = subplot(gs_lfp_2[3,1])
+colorbar(img, ax)
+title("z")
 
 ###########################################
 gs1 = gridspec.GridSpecFromSubplotSpec(1, 4, subplot_spec=outergs[1, 0], width_ratios=[0.4, 0.01, 0.2, 0.4], hspace=0.1)
@@ -331,25 +340,26 @@ data2 = cPickle.load(open("/mnt/home/gviejo/Dropbox/UFOPhysio/figures/poster/fig
 subplot(gs1[0,2])
 simpleaxis(gca())
 
-titles = ['NREM', 'WAKE', 'REM']
+titles = ['NREM', 'WAKE']
 colors2 = ['#686963', '#8aa29e', '#3d5467']
 
 rates = data2['rates']
-for i, e in enumerate(['sws', 'wak', 'rem']):
+for i, e in enumerate(['sws', 'wak']):
     y = rates[e].dropna().values
     x = np.ones(len(y))*i+np.random.randn(len(y))*0.1
     plot(y, x, 'o', markersize=0.5, color = colors2[i])
     plot([y.mean(), y.mean()], [i-0.2, i+0.2], '-', color = 'red', linewidth=1.0)
     gca().invert_yaxis()
-yticks(range(3), titles)
+    xlim(0, 2)
+yticks(range(2), titles)
 # xticks([0, 1, 2, 3], ["0", "1", "2", "3"])
 xlabel("Rate (Hz)")
 
-gs_iui = gridspec.GridSpecFromSubplotSpec(3, 3, subplot_spec=gs1[0,3], hspace = 0.5, wspace = 0.5, width_ratios=[0.1, 0.6, 0.1])
+gs_iui = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs1[0,3], hspace = 0.5, wspace = 0.5, width_ratios=[0.1, 0.6, 0.1])
 
 
 iui = data2['iui']
-for i, e in enumerate(['sws', 'wak', 'rem']):
+for i, e in enumerate(['sws', 'wak']):
     subplot(gs_iui[i,1])
     simpleaxis(gca())        
     # semilogx(iui[e], color='grey', alpha=0.5, linewidth=0.5)
@@ -359,10 +369,9 @@ for i, e in enumerate(['sws', 'wak', 'rem']):
     # semilogx(, linewidth=1, color=colors2[i])
     # gca().text(1.1, 0.3, titles[i], transform=gca().transAxes)
     yticks([5])
-
-    if i == 1: ylabel("%", rotation=0, labelpad=10)
-
-    if i in [0, 1]:
+    ylabel("%", rotation=0, labelpad=10)
+    if i == 0:         
+    # if i in [0, 1]:
         gca().spines['bottom'].set_visible(False)
         xticks([])
     else:

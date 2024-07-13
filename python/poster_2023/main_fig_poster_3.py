@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2024-05-01 14:35:04
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-24 15:26:36
+# @Last Modified time: 2024-06-08 16:17:05
 
 import numpy as np
 import pandas as pd
@@ -226,7 +226,9 @@ for i, t in enumerate(exs):
 
 ### CCS
 gs_peth = gridspec.GridSpecFromSubplotSpec(4, 2, 
-    subplot_spec=gs0[0, 1], width_ratios=[0.05, 0.3], wspace = 1, hspace=0.3)
+    subplot_spec=gs0[0, 1], 
+    width_ratios=[0.05, 0.3], height_ratios=[0.1, 0.4, 0.2, 0.1],
+    wspace = 1, hspace=0.3)
 
 data = cPickle.load(open(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/cc_sound.pickle"), 'rb'))
 
@@ -234,27 +236,38 @@ peths = data['peths']
 ccs = data['ccs']
 
 
+# top = cm.get_cmap('Oranges_r', 128)
+bottom = cm.get_cmap('copper', 128)
+
+
+colors = bottom(np.linspace(0, 1, len(peths)))
+
+
 subplot(gs_peth[1,1])
 simpleaxis(gca())
 gca().spines['bottom'].set_visible(False)
-for s in peths:
+count = 0
+for i,s in enumerate(peths):
     tmp = peths[s]
-    scatter(tmp.index.values, tmp.values, s=0.1, c=COLOR)
+    scatter(tmp.index.values, tmp.values+count, s=1, fc=colors[i], ec=None, alpha=0.5)
+    count += np.max(tmp) + 50
 xticks([])
-xlim(-0.03, 0.03)
+yticks([])
+xlim(-0.05, 0.05)
 axvline(0, color = COLOR, linewidth=0.2)
 ylabel("Events", rotation=0, labelpad=20)
 
 
 subplot(gs_peth[2,1])
 simpleaxis(gca())
-plot(ccs['sws']*100.0, color=COLOR, linewidth = 1)
+for i in range(len(peths)):
+    plot(ccs['sws'].iloc[:,i], color=colors[i], linewidth = 1, alpha=0.5)
 axvline(0, color = COLOR, linewidth=0.1)
-xlim(-0.03, 0.03)
-ylabel("%", rotation=0, labelpad=20)    
-xlabel("UFO/Sound (ms)")
+xlim(-0.05, 0.05)
+ylabel("Rate\n(norm.)", rotation=0, labelpad=20, y=0.4)
+xlabel("Sound time (ms)")
 
-xticks([-0.03, 0.0, 0.03], [-30, 0, 30])
+xticks([-0.05, 0.0, 0.05], [-50, 0, 50])
 
 outergs.update(top=0.95, bottom=0.09, right=0.98, left=0.06)
 

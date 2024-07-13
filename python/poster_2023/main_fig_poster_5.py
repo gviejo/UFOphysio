@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2024-05-01 14:35:04
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-29 11:18:24
+# @Last Modified time: 2024-06-05 10:38:46
 
 import numpy as np
 import pandas as pd
@@ -50,7 +50,7 @@ def figsize(scale):
     golden_mean = (np.sqrt(5.0)-1.0) / 2           # Aesthetic ratio (you could change this)
     fig_width = fig_width_pt*inches_per_pt*scale    # width in inches
     # fig_width = 5
-    fig_height = fig_width*golden_mean*1         # height in inches
+    fig_height = fig_width*golden_mean*0.9         # height in inches
     fig_size = [fig_width,fig_height]
     return fig_size
 
@@ -115,7 +115,7 @@ elif os.path.exists('/mnt/ceph/users/gviejo'):
 elif os.path.exists('/media/guillaume/Raid2'):
     data_directory = '/media/guillaume/Raid2'
 
-name = 'LMN-ADN/A5022/A5022-210527A'
+name = 'LMN-ADN/A5044/A5044-240402A'
 path = os.path.join(data_directory, name)
 
 colors = {"ADN": "#EA9E8D", "LMN": "#8BA6A9", "PSB": "#CACC90", "ctrl":"grey"}
@@ -138,57 +138,214 @@ nSS = nap.load_file(os.path.join(data.path, "nSS_LMN.npz"))
 
 channels = data.group_to_channel
 
+wak_ex = nap.IntervalSet(7326.459, 7326.759)
 
 
+ts_wak = [
+    #7326.612,
+    7330.761,
+    7345.842,
+    # 7486.110
+    7619.862
+    ]
 
+position = data.position
+ep = position[['x', 'z']].time_support.loc[[0]]
+bin_size = 0.01
+# lin_velocity = computeLinearVelocity(position[['x', 'z']], ep, bin_size)
+# lin_velocity = lin_velocity*100.0
 
-structs = ['CA1', 'LMN']
+ang_velocity = computeAngularVelocity(position['ry'], ep, bin_size)
+ang_velocity = np.abs(ang_velocity)
+ang_velocity = ang_velocity/bin_size
+ang_velocity = np.rad2deg(ang_velocity)
+
 
 ###############################################################################################################
 # PLOT
 ###############################################################################################################
 
-fig = figure(figsize=figsize(0.9))
+fig = figure(figsize=figsize(1))
 
-outergs = GridSpec(2, 1, figure=fig, height_ratios=[0.5, 0.1], hspace=0.2)
+outergs = GridSpec(2, 1, figure=fig, height_ratios=[0.7, 0.4], hspace=0.5)
 
-gs0 = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=outergs[0, 0])
+gs0 = gridspec.GridSpecFromSubplotSpec(3, 4, subplot_spec=outergs[0, 0], width_ratios=[0.05, 0.2, 0.2, 0.2],
+    height_ratios=[0.4, 0.2, 0.2]
+    )
+
+# LFP
+chs = 6
+structs = ['LMN']
+cut = [0.3, 0.3]
+prop = dict(arrowstyle="-|>,head_width=0.1,head_length=0.2",
+            shrinkA=0,shrinkB=0)
 
 
-gs1 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outergs[1, 0])
+for i in range(len(ts_wak)):
+    t = ts_wak[i]
+    eptmp = nap.IntervalSet(t-cut[0], t+cut[1])
+    tmp = lfp.restrict(eptmp)
+    subplot(gs0[0,i+1])
+    noaxis(gca())
+    [plot((tmp[:,c]-k*1000)*1, linewidth=0.25, color=colors["LMN"]) for k, c in enumerate(channels[chs])]
+    xlim(t-cut[0], t+cut[1])
+    if i == 0:
+        ylabel("LMN", rotation=0, y=0.3, labelpad=15)
+    else:
+        yticks([])    
+    annotate("", (t, 1000), (t, 1010), arrowprops=prop)
+
+    
+
+
+    subplot(gs0[1,i+1])
+    simpleaxis(gca())
+    tmp = nSS.restrict(eptmp).smooth(0.002)
+    plot(tmp, linewidth=1, color = "slategrey")
+    xlim(t-cut[0], t+cut[1])
+    xticks([])
+    if i == 0: 
+        ylabel("Power\n(z)", rotation=0, y=0.3, labelpad=15)
+    else:
+        yticks([])
+
+    gca().spines['bottom'].set_visible(False)
+
+    if i > 0:
+        gca().spines['left'].set_visible(False)
+
+
+    subplot(gs0[2,i+1])
+    simpleaxis(gca())
+    plot(ang_velocity.restrict(eptmp), color = "darkgreen", linewidth=1)
+    xlim(t-cut[0], t+cut[1])
+    xticks([])
+    gca().spines['bottom'].set_bounds(t+cut[1]-0.1, t+cut[1])
+    xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["10 ms"])
+    if i == 0:
+        ylabel("Angular\nvelocity\n(deg/s)", rotation=0, y=0.1, labelpad=20)
+    else:
+        yticks([])
+
+    if i > 0:
+        gca().spines['left'].set_visible(False)
+
+
+    # ax2 = gca().twinx()
+    # simpleaxis(ax2)
+    # ax2.plot(ang_velocity.get(t-cut[0], t+cut[1]), label="Angular velocity")    
+    # if i == 0:
+    #     legend()
+
+
+
+
+gs1 = gridspec.GridSpecFromSubplotSpec(1, 2, 
+    subplot_spec=outergs[1, 0], wspace = 0.3, hspace=0.5)
 
 data = cPickle.load(open(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/CORR_UFO_SPEED.pickle"), 'rb'))
 
 eta_linv = data['eta_linv']
 eta_angv = data['eta_angv']
 
-subplot(gs1[0,0])
+
+
+gs1_1 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gs1[0, 0], wspace = 0.5)
+subplot(gs1_1[0,0])
 simpleaxis(gca())
 tmp = eta_linv - eta_linv.mean()
 tmp = tmp / tmp.std()
-plot(tmp, color='grey', alpha=0.8, linewidth=0.8)
-plot(tmp.mean(1), linewidth=4)
-title("Linear speed")
-axvline(0.0)
-ylabel("Z")
+plot(tmp, color='grey', alpha=0.2, linewidth=0.1)
+plot(tmp.mean(1), linewidth=1, color = "midnightblue")
+# plot(eta_linv.mean(1))
+title("Linear velocity")
+axvline(0.0, linewidth=0.5, color = COLOR)
+ylim(-3, 3)
+ylabel("z")
+xlabel("HD wave\ntime (s)")
 
-subplot(gs1[0,1])
+subplot(gs1_1[0,1])
 simpleaxis(gca())
 tmp = eta_angv - eta_angv.mean()
 tmp = tmp / tmp.std()
-plot(tmp, color='grey', alpha=0.8, linewidth=0.8)
-plot(tmp.mean(1), linewidth=4)
-title("Angular speed")
-axvline(0.0)
-ylabel("Z")
+plot(tmp, color='grey', alpha=0.2, linewidth=0.1)
+plot(tmp.mean(1), linewidth=1, color = "darkgreen")
+# plot(eta_angv.mean(1))
+title("Angular velocity")
+axvline(0.0, linewidth=0.5, color = COLOR)
+ylim(-3, 3)
+ylabel("z")
+xlabel("HD wave\ntime (s)")
 
 
+#########
 
-outergs.update(top=0.98, bottom=0.09, right=0.98, left=0.05)
+gs1_2 = gridspec.GridSpecFromSubplotSpec(2, 2, subplot_spec=gs1[0, 1], hspace=0.5)
+
+trans_start = data['trans_start']
+trans_stop = data['trans_stop']
+peth_start = data['peth_start']
+peth_stop = data['peth_stop']
+
+
+subplot(gs1_2[0,0])
+gca().spines['bottom'].set_visible(False)
+simpleaxis(gca())
+offset = 0
+for i, s in enumerate(peth_start.keys()):
+    plot(peth_start[s].loc[-0.4:0.4].index.values, peth_start[s].loc[-0.4:0.4].values + offset, 'o', markersize=0.5, markeredgewidth=0, markerfacecolor='black')
+    offset += len(peth_start[s])+5
+xlim(-0.4, 0.4)
+yticks([offset], [len(peth_start)])
+xticks([])
+ylabel("Sessions", rotation=0, y=0.3, labelpad=15)
+title("pause -> turn")
+
+subplot(gs1_2[1,0])
+simpleaxis(gca())
+tmp = trans_start.rolling(window=50,win_type='gaussian',center=True,min_periods=1).mean(std=2)
+# plot(tmp.loc[-0.4:0.4], alpha = 0.5, linewidth = 1)
+plot(tmp.loc[-0.4:0.4].mean(1), color='grey', linewidth = 1)
+m = tmp.loc[-0.4:0.4].mean(1)
+s = tmp.loc[-0.4:0.4].std(1).values
+fill_between(m.index.values, m.values - s, m.values + s, alpha = 0.5, color = 'grey', linewidth=0)
+axvline(0.0, linewidth=0.5, color = COLOR)
+maxv = np.max(m.values + s)
+ylim(0, maxv+1)
+legend(frameon=False)
+xlabel("time (s)")
+xlim(-0.4, 0.4)
+
+subplot(gs1_2[0,1])
+gca().spines['bottom'].set_visible(False)
+simpleaxis(gca())
+offset = 0
+for i, s in enumerate(peth_start.keys()):
+    plot(peth_stop[s].loc[-0.4:0.4].index.values, peth_stop[s].loc[-0.4:0.4].values + offset, '.', markersize=0.5, markeredgewidth=0, markerfacecolor='black')
+    offset += len(peth_stop[s])+1
+xlim(-0.4, 0.4)
+yticks([offset], [len(peth_start)])
+xticks([])
+title("turn -> pause")
+
+subplot(gs1_2[1,1])
+simpleaxis(gca())
+tmp = trans_stop.rolling(window=50,win_type='gaussian',center=True,min_periods=1).mean(std=2)
+# plot(tmp.loc[-0.4:0.4], alpha = 0.5, linewidth = 1)
+plot(tmp.loc[-0.4:0.4].mean(1), color='grey', linewidth = 1)
+m = tmp.loc[-0.4:0.4].mean(1)
+s = tmp.loc[-0.4:0.4].std(1).values
+fill_between(m.index.values, m.values - s, m.values + s, alpha = 0.5, color = 'grey', linewidth=0)
+axvline(0.0, linewidth=0.5, color=COLOR)
+legend(frameon=False)
+ylim(0, maxv+1)
+xlabel("time (s)")
+
+outergs.update(top=0.98, bottom=0.1, right=0.98, left=0.05)
 
 
 savefig(
-    os.path.expanduser("~") + r"/Dropbox/Applications/Overleaf/FENS 2024/figures/fig5.png",
+    os.path.expanduser("~") + r"/Dropbox/Applications/Overleaf/FENS 2024/figures/fig5.pdf",
     dpi=200,
     facecolor="white",
 )

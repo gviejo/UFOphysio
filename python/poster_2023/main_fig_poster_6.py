@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2024-05-01 14:35:04
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-29 11:07:05
+# @Last Modified time: 2024-06-15 17:51:14
 
 import numpy as np
 import pandas as pd
@@ -20,6 +20,7 @@ import matplotlib.font_manager as font_manager
 import matplotlib.image as mpimg
 sys.path.append("../")
 from functions import *
+from ufo_detection import loadRipples, loadUFOs
 import _pickle as cPickle
 
 def get_memory_map(filepath, nChannels, frequency=20000):
@@ -118,7 +119,7 @@ elif os.path.exists('/media/guillaume/Raid2'):
 name = 'LMN-ADN/A5022/A5022-210527A'
 path = os.path.join(data_directory, name)
 
-colors = {"ADN": "#EA9E8D", "LMN": "#8BA6A9", "PSB": "#CACC90", "ctrl":"grey"}
+colors = {"ADN": "#EA9E8D", "LMN": "#8BA6A9", "PSB": "#CACC90", "ctrl":"grey", "CA1":"#C8D1AD"}
 
 ############################################################################################### 
 # LOADING DATA
@@ -138,7 +139,8 @@ nSS = nap.load_file(os.path.join(data.path, "nSS_LMN.npz"))
 
 channels = data.group_to_channel
 
-
+ufo_ep, ufo_ts = loadUFOs(path)
+rip_ep, rip_ts = loadRipples(path)
 
 
 
@@ -150,9 +152,9 @@ structs = ['CA1', 'LMN']
 
 fig = figure(figsize=figsize(0.9))
 
-outergs = GridSpec(2, 1, figure=fig, height_ratios=[0.5, 0.1], hspace=0.2)
+outergs = GridSpec(2, 1, figure=fig, height_ratios=[0.2, 0.3], hspace=0.4)
 
-gs0 = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=outergs[0, 0], height_ratios=[0.2, 0.4])
+gs0 = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=outergs[0, 0], height_ratios=[0.2, 0.4], hspace=0)
 
 
 chs = [4]
@@ -165,50 +167,95 @@ alphas = [1, 0.5, 1, 0.5]
 ts_ex = 1913.856
 # ts_ex = 15.816
 
+labels = ['HD wave', 'CA1 SWRs']
+clrs = ['LMN', 'CA1']
 
 # ######################################
-# PWR
-pwrs = nap.load_file(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/pwr_ufo_ca1.npz"))
-
+# HISTOGRAM
 subplot(gs0[0,0])
+noaxis(gca())
+# gca().spines['bottom'].set_visible(False)
+
+ep = nap.IntervalSet(ts_ex-80, ts_ex+80)
+
+ufo_ts = ufo_ts.restrict(ep)
+rip_ts = rip_ts.restrict(ep)
+
+plot(rip_ts.t, np.random.randn(len(rip_ts))+10, '|', color = colors['CA1'], markersize=2)
+plot(ufo_ts.t, np.random.randn(len(ufo_ts)), '|', color = colors['LMN'], markersize=2)
+
+yticks([0, 10], labels)
+xlim(ep[0,0], ep[0,1])
+ylim(-10, 20)
+
+xticks([])
+axvspan(ts_ex-1, ts_ex+1, color = 'grey', alpha=0.25, linewidth=0)
+
+#
+subplot(gs0[1,0])
 simpleaxis(gca())
 gca().spines['bottom'].set_visible(False)
+binsize = 0.5
+for i, ts in enumerate([ufo_ts, rip_ts]):
+    tmp = ts.count(binsize)
+    bar(tmp.t, tmp.d, binsize, color = colors[clrs[i]], label = labels[i], edgecolor=colors[clrs[i]])
+xlim(ep[0,0], ep[0,1])
+ylabel("Count", rotation=0, labelpad=15)
+axvspan(ts_ex-1, ts_ex+1, color = 'grey', alpha=0.25, linewidth=0)
+gca().spines['bottom'].set_bounds(ep[0,1]-10, ep[0,1])
+xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["10 s"])
+ax1 = gca()
 
+# ######################################
+# LFP
+gs1 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outergs[1, 0], width_ratios=[0.4, 0.2], wspace=0.5)
 
-ep = nap.IntervalSet(ts_ex-10, ts_ex+10)
-
-for i, name in enumerate(['ufo', 'ca1']):
-    tmp = pwrs[name].smooth(0.5).restrict(ep)
-    tmp = tmp - np.mean(tmp)
-    tmp = tmp / np.std(tmp)
-    plot(tmp, label=name)
-legend()
-
-axvspan(ts_ex-1.0, ts_ex+1.0, alpha=0.5, linewidth = 0)
-
-
-gs_ex = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs0[1,0])#, hspace=0.0, wspace=0.0)
+gs_ex = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs1[0,0])#, width_ratios=[0.1, 0.6, 0.1])#, hspace=0.0, wspace=0.0)
 tmp = lfp.get(ts_ex-1, ts_ex+1)
-# CA1
 
+prop = dict(arrowstyle="-|>,head_width=0.15,head_length=0.3",
+            shrinkA=0,shrinkB=0)
+
+
+# CA1
 subplot(gs_ex[0,0])
 noaxis(gca())
-plot((tmp[:,3]), linewidth=0.5, color="darkgreen")
+plot((tmp[:,3]), linewidth=0.5, color=colors['CA1'])
+ax2 = gca()
+xlim(ts_ex-1, ts_ex+1)
+ylabel("CA1", rotation=0, y=0.3, labelpad=15)
+for t in rip_ts.restrict(nap.IntervalSet(ts_ex-1, ts_ex+1)).t:
+    annotate("", (t, gca().get_ylim()[0]), (t, gca().get_ylim()[0]-100), arrowprops=prop)
 
 #LMN
 subplot(gs_ex[1,0])
 noaxis(gca())
 [plot((tmp[:,c]-k*1000)*2, linewidth=0.5, color=colors["LMN"]) for k, c in enumerate(channels[chs[0]][::2])]
-# xlim(t-0.02, t+0.04)
-# ylabel(yls[j], rotation=0, y=0.3, labelpad=15)
-    
+ylabel("LMN", rotation=0, y=0.3, labelpad=15)
+xlim(ts_ex-1, ts_ex+1)
+gca().spines['bottom'].set_visible(True)
+gca().spines['bottom'].set_bounds(gca().get_xlim()[1]-0.5, gca().get_xlim()[1])
+xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["500 ms"])
+annotate("", (ts_ex, gca().get_ylim()[1]), (ts_ex, gca().get_ylim()[1]+100), arrowprops=prop)
 
-gs1 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=outergs[1, 0])#, width_ratios=[0.2, 0.8])
 
+from matplotlib.patches import ConnectionPatch
+
+xy = (ts_ex-1, 0)
+con = ConnectionPatch(xyA=(0, 1), xyB=xy, coordsA="axes fraction", coordsB="data",
+                      axesA=ax2, axesB=ax1, color=COLOR, linewidth=0.01)
+ax2.add_artist(con)
+
+xy = (ts_ex+1, 0)
+con = ConnectionPatch(xyA=(1, 1), xyB=xy, coordsA="axes fraction", coordsB="data",
+                      axesA=ax2, axesB=ax1, color=COLOR, linewidth=0.01)
+ax2.add_artist(con)
 
 
 # ######################################
 # # CC
+gs_cc = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gs1[0, 1], hspace=0.6)#, width_ratios=[0.2, 0.8])
+
 data = cPickle.load(open(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/CC_UFO_SWR.pickle"), 'rb'))
 
 cc_long = data["long"]
@@ -216,19 +263,31 @@ cc_short = data["short"]
 
 
 
-cc_long = cc_long.rolling(window=20,win_type='gaussian',center=True,min_periods=1).mean(std=1)
 
 
-subplot(gs1[0,1])
+subplot(gs_cc[0,0])
 simpleaxis(gca())
 
-plot(cc_long, alpha = 0.25, linewidth=1, color = "grey")
-plot(cc_long.mean(1), linewidth = 4, color = 'red', label = "SWR")
-xlabel("ufo (s)")
+cc_long = cc_long.rolling(window=20,win_type='gaussian',center=True,min_periods=1).mean(std=2)
+
+plot(cc_long, alpha = 0.25, linewidth=0.5, color = "grey")
+plot(cc_long.mean(1), linewidth = 2, color = 'gray', label = "SWR")
+# xlabel("HD wave\ntime (s)")
+ylabel("Rate SWRs\n(norm.)", rotation=0, labelpad=20, y =0.4)
+
+subplot(gs_cc[1,0])
+simpleaxis(gca())
+
+cc_short = cc_short.rolling(window=20,win_type='gaussian',center=True,min_periods=1).mean(std=3)
+
+plot(cc_short, alpha = 0.25, linewidth=0.5, color = "grey")
+plot(cc_short.mean(1), linewidth = 2, color = 'gray', label = "SWR")
+xlabel("HD wave\ntime (s)")
+ylabel("Rate SWRs\n(norm.)", rotation=0, labelpad=20, y =0.4)
 
 
 
-outergs.update(top=0.98, bottom=0.09, right=0.98, left=0.05)
+outergs.update(top=0.98, bottom=0.1, right=0.98, left=0.1)
 
 
 savefig(

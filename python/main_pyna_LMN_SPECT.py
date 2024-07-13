@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2023-12-02 17:38:44
+# @Last Modified time: 2024-06-18 16:25:43
 
 import numpy as np
 import pandas as pd
@@ -17,6 +17,10 @@ from itertools import combinations
 # import pynacollada as pyna
 from ufo_detection import *
 from matplotlib.pyplot import *
+from scipy import signal
+from scipy.ndimage import gaussian_filter
+
+# nap.nap_config.set_backend("jax")
 
 ############################################################################################### 
 # GENERAL infos
@@ -33,7 +37,7 @@ elif os.path.exists('/media/guillaume/Raid2'):
 datasets = np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ADN.list'), delimiter = '\n', dtype = str, comments = '#')
 
 # for s in datasets:
-for s in ['LMN-ADN/A5011/A5011-201014A']:
+for s in ['LMN-ADN/A5044/A5044-240402A']:
     ############################################################################################### 
     # LOADING DATA
     ###############################################################################################
@@ -54,56 +58,55 @@ for s in ['LMN-ADN/A5011/A5011-201014A']:
     spikes = spikes[idx]
 
     data.load_neurosuite_xml(data.path)
-    channels = data.group_to_channel[np.unique(spikes._metadata["group"].values)[0]]    
+    channels = data.group_to_channel[np.unique(spikes._metadata["group"].values)[0]]
     filename = data.basename + ".dat"    
             
     fp, timestep = get_memory_map(os.path.join(data.path, filename), data.nChannels)
 
-    timestep = nap.Tsd(t=timestep, d=np.arange(len(timestep)))
+    lfp = nap.TsdFrame(t=timestep, d=fp)
 
     ############################################################################################### 
-    # SPECTROGRAM
+    # MORLET WAVELET SPECTROGRAM
     ###############################################################################################
+    ep = nap.IntervalSet(11005.982-0.5, 11005.982+0.5)
 
+    lfp = lfp.restrict(ep)[:,channels]
 
-    # for i in ufo_ep.index:
-    #     tmp = timestep.restrict(ufo_ep.loc[[i]])
-    #     lfp = fp[tmp.values[0]-10000:tmp.values[-1]+10000]
-    #     lfp = lfp[:,channels]
+    fs = 20000.0
+    dt = 1/fs
+    w = 3.
+    # freq = np.linspace(100, 2000, 100)
+    freq = np.geomspace(100, 4000, 1000)
+    widths = w*fs / (2*freq*np.pi)
+    
+    tfd = np.zeros((len(lfp), len(channels), len(freq)))
 
-    #     sys.exit()
+    for i in range(len(widths)):
+        wavelet = signal.morlet2(10*widths[i], widths[i], w)
 
+        wavelet = wavelet/np.sum(np.abs(wavelet))
+        
+        a = lfp.convolve(wavelet.real).d
+        b = lfp.convolve(wavelet.imag).d
+        tmp = np.abs(a+1j*b)
+        tfd[:,:,i] = tmp
 
-ep = nap.IntervalSet(start = 14870.909, end = 14871.909)
+    tfd = np.mean(tfd, 1)
+    tfd = nap.TsdFrame(t=lfp.t, d=tfd, columns = freq)
 
-tmp = timestep.restrict(ep)
-lfp = fp[tmp.values[0]:tmp.values[-1]]
-lfp = lfp[:,channels]
+t = 11005.982
+ex_ep = nap.IntervalSet(t-0.02, t+0.04)
 
+tfd.save(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/"+s.split("/")[-1]+"_TFD_Ex.npz"))
 
-import matplotlib.pyplot as plt
-s = lfp[:,0]
-t = np.arange(0, len(s))*(1/20000)
-s = s*np.blackman(s.size)
+figure()
+subplot(211)
+plot(lfp[:,0].restrict(ex_ep))
+xlim(ex_ep[0,0], ex_ep[0,1])
 
-
-fig, axs = plt.subplots(figsize=(15, 5), nrows=2, gridspec_kw={'height_ratios':[2, 5]})
-
-axs[0].plot(t, s)
-axs[0].set_xticklabels([])
-axs[0].set_xlim()
-# axs[0].axvline(0.125, color='red', alpha=0.5, lw=1)
-
-*_, im = axs[1].specgram(s, Fs=20000, NFFT=256, noverlap=200, cmap='jet', mode='magnitude')
-axs[1].tick_params(axis='both', which='major', labelsize=16)
-# cbar = plt.colorbar(im, aspect=10)
-# cbar.ax.tick_params(labelsize=12) 
-axs[1].grid(alpha=0.3)
-#axs[1].grid(False)
-axs[1].set_ylim(0, 2000)
-axs[1].set_ylabel("↑ freq [Hz]")
-axs[1].set_xlabel("time [s] →")
-
-plt.tight_layout()
-plt.show()
-
+subplot(212)
+tmp = tfd.restrict(ex_ep).d
+# tmp = tmp - np.mean(tmp, 0)
+# tmp = tmp / np.std(tmp, 0)
+imshow(gaussian_filter(tmp, 1).T , aspect='auto', origin='lower', extent = (ex_ep[0,0], ex_ep[0,1], freq[0], freq[-1]))
+show()

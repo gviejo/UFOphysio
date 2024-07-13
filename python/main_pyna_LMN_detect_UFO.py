@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-05-30 10:49:33
+# @Last Modified time: 2024-06-06 17:09:31
 
 import numpy as np
 import pandas as pd
@@ -40,8 +40,18 @@ ufo_channels = np.genfromtxt(os.path.join(data_directory, 'channels_UFO.txt'), d
 ufo_channels = {a[0]:a[1:].astype('int') for a in ufo_channels}
 
 
-for s in datasets:
+datasets = [#"LMN-ADN/A5044/A5044-240401B",
+            # "OPTO/B3000/B3007/B3007-240501A",
+            # "OPTO/B3000/B3009/B3009-240502C",
+            # "OPTO/B3000/B3010/B3010-240510C",
+            # "LMN-ADN/A5044/A5044-240403B",
+            # "OPTO/B3000/B3007/B3007-240502A",
+            # "OPTO/B3000/B3009/B3009-240503C",
+            "OPTO/B3000/B3010/B3010-240511A"]
+
+# for s in datasets[19:]:
 # for s in ['LMN/A1411/A1411-200910A']:
+for s in datasets:
     print(s)
     ############################################################################################### 
     # LOADING DATA
@@ -82,9 +92,9 @@ for s in datasets:
 
         fp, timestep = get_memory_map(os.path.join(data.path, filename), data.nChannels)
         
-        ufo_ep, ufo_tsd, nSS = detect_ufos_v2(fp, sign_channels[::2], ctrl_channels[::2], timestep)
+        ufo_ep, ufo_tsd, nSS = detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep)
         
-        
+        ############################
         # Higher threshold for wake
         from pynapple.core._core_functions import _restrict
 
@@ -97,6 +107,7 @@ for s in datasets:
 
         ufo_tsd = ufo_tsd[tokeep]
         ufo_ep = ufo_ep[tokeep]
+        ####################
         
         # Saving with pynapple
         ufo_ep.save(os.path.join(path, data.basename + '_ufo_ep'))

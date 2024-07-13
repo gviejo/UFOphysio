@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-02-07 10:12:31
+# @Last Modified time: 2024-07-13 16:23:40
 
 import numpy as np
 import pandas as pd
@@ -77,18 +77,12 @@ for g in datasets.keys():
 
             filename = data.basename + ".dat"
                     
-            fp, timestep = get_memory_map(os.path.join(data.path, filename), data.nChannels)            
+            fp, timestep = get_memory_map(os.path.join(data.path, filename), data.nChannels)
 
             fs = 20000.0
             dt = 1/fs
-            w = 5.
-            # freq = np.linspace(100, 2000, 100)
-            freq = np.geomspace(100, 2000, 200)
-            widths = w*fs / (2*freq*np.pi)
-            windowsize = 0.05
-            N = int(windowsize/dt)*2          
-            pwr = np.zeros((len(freq),N))
-            count = 0.0
+
+            sys.exit()
 
             #############################
             st = np.searchsorted(timestep, ufo_ts.t)

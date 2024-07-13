@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-02-28 16:16:36
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2023-12-10 17:54:31
+# @Last Modified time: 2024-06-04 17:06:14
 import numpy as np
 from numba import jit
 import pandas as pd
@@ -91,7 +91,7 @@ def computeAngularVelocity(angle, ep, bin_size):
     """        
     tmp = np.unwrap(angle.restrict(ep).values)
     tmp = pd.Series(index=angle.restrict(ep).index.values, data=tmp)
-    tmp = tmp.rolling(window=100,win_type='gaussian',center=True,min_periods=1).mean(std=2.0)    
+    tmp = tmp.rolling(window=100,win_type='gaussian',center=True,min_periods=1).mean(std=1.0)
     tmp = nap.Tsd(t = tmp.index.values, d = tmp.values)    
     tmp = tmp.bin_average(bin_size)
     t = tmp.index.values[0:-1]+np.diff(tmp.index.values)
