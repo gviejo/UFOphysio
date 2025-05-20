@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2024-05-01 14:35:04
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-06-08 16:17:05
+# @Last Modified time: 2024-10-02 12:12:53
 
 import numpy as np
 import pandas as pd
@@ -147,14 +147,14 @@ exs = [
     2023.87835
 ]
 
-tcurves = { "ADN":nap.compute_1d_tuning_curves(data.spikes.getby_category("location")['adn'], data.position['ry'], 60, data.epochs['wake']),
-            "LMN":nap.compute_1d_tuning_curves(data.spikes.getby_category("location")['lmn'], data.position['ry'], 60, data.epochs['wake'])}
+# tcurves = { "ADN":nap.compute_1d_tuning_curves(data.spikes.getby_category("location")['adn'], data.position['ry'], 60, data.epochs['wake']),
+#             "LMN":nap.compute_1d_tuning_curves(data.spikes.getby_category("location")['lmn'], data.position['ry'], 60, data.epochs['wake'])}
 
 
-for k in tcurves:
-    tcurves[k] = smoothAngularTuningCurves(tcurves[k], 40, 5)
-    mi = nap.compute_1d_mutual_info(tcurves[k], data.position['ry'], data.epochs['wake'])
-    tcurves[k] = tcurves[k][mi[mi>0.1].dropna().index]
+# for k in tcurves:
+#     tcurves[k] = smoothAngularTuningCurves(tcurves[k], 40, 5)
+#     mi = nap.compute_1d_mutual_info(tcurves[k], data.position['ry'], data.epochs['wake'])
+#     tcurves[k] = tcurves[k][mi[mi>0.1].dropna().index]
 
 
 ###############################################################################################################
@@ -197,6 +197,7 @@ for i, t in enumerate(exs):
     simpleaxis(gca())
     plot(nSS.get(t-window_size[0], t+window_size[1]), color = colors["LMN"], linewidth=1, label="600-2000 Hz")
     xlim(t-window_size[0], t+window_size[1])
+    ylim(-3,12)
     gca().spines['bottom'].set_bounds(t+0.03, t+window_size[1])
     xticks(gca().spines['bottom'].get_bounds()[0] + np.diff(gca().spines['bottom'].get_bounds())/2, ["10 ms"])    
     axhline(3.0, linewidth=0.1, color=COLOR, linestyle="--")    

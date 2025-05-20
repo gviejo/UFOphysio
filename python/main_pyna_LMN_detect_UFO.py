@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-06-06 17:09:31
+# @Last Modified time: 2024-10-23 11:18:41
 
 import numpy as np
 import pandas as pd
@@ -51,8 +51,10 @@ datasets = [#"LMN-ADN/A5044/A5044-240401B",
 
 # for s in datasets[19:]:
 # for s in ['LMN/A1411/A1411-200910A']:
-for s in datasets:
+# for s in datasets:
+for s in ['ADN-HPC/B3214/B3218-241018']:
     print(s)
+    sys.exit()
     ############################################################################################### 
     # LOADING DATA
     ###############################################################################################
