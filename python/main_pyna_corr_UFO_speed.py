@@ -13,7 +13,7 @@ import _pickle as cPickle
 from matplotlib.pyplot import *
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from itertools import combinations
-from functions import *
+from functions.functions import *
 # import pynacollada as pyna
 from ufo_detection import *
 
@@ -49,6 +49,8 @@ trans_stop = {}
 
 peth_start = {}
 peth_stop = {}
+
+tuning_curves_ufo = {}
 
 # %%
 for s in datasets:
@@ -100,30 +102,15 @@ for s in datasets:
         peth_start[s] = nap.compute_perievent(ufo_gr, tmp.ends, 2)[0].to_tsd().as_series()
         peth_stop[s] = nap.compute_perievent(ufo_gr, tmp.starts, 2)[0].to_tsd().as_series()
                 
-        # # 2D tuning curves 
-        # n_bins = 50
-        # xb = np.geomspace(0.01, 10.0, n_bins) # linaer
-        # yb = np.geomspace(0.01, 2*np.pi, n_bins) # angular
-
-        # idx = np.vstack((
-        #     np.digitize(lin_velocity.d, xb),
-        #     np.digitize(ang_velocity.d, yb)
-        #     )).T
-
-        # count = ufo_gr.count(ep, bin_size).d.flatten()
-
-        # hist_ufo_vel = np.zeros((n_bins, n_bins))
-        # for i, (j,k) in enumerate(idx):
-        #     hist_ufo_vel[j-1,k-1] += count[i]
-
-        # hist_ang_lin = np.zeros((n_bins, n_bins))
-        # for i, (j,k) in enumerate(idx):
-        #     hist_ang_lin[j-1,k-1] += 1.0
-        # hist_ang_lin /= np.sum(hist_ang_lin)
-        # ang_lin.append(hist_ang_lin)
-
-        # hist_ufo_vel = hist_ufo_vel/(hist_ang_lin+1)
-        # ufo_vel.append(hist_ufo_vel)
+        # Tuning curves of the UFO during wake
+        tuning_curves_ufo[s] = nap.compute_tuning_curves(
+            ufo_gr,
+            position['ry'],
+            bins=30,
+            range=(0, 2 * np.pi),
+            epochs=ep,
+            return_pandas=True,
+        )[0]
 
 
 # %%
@@ -195,46 +182,10 @@ ylabel("Z")
 
 show()
 
-# gs2 = GridSpecFromSubplotSpec(2, 2, gs[1,0], width_ratios=[0.8,0.4], height_ratios=[0.4,0.8])
-
-# subplot(gs2[0,0])
-# tmp1 = ufo_vel.mean(0).mean(0)[0:-1]
-# semilogx(xb[0:-1], tmp1/tmp1.sum())
-# tmp2 = ang_lin.mean(0).mean(0)[0:-1]
-# semilogx(xb[0:-1], tmp2/tmp2.sum())
-
-# subplot(gs2[1,0])
-# imshow(ufo_vel.mean(0)[0:-1,0:-1], cmap='jet', origin='lower', aspect='auto')
-# title("UFO")
-# xlabel("Linear (cm/s)")
-# ylabel("Angular (rad/s)")
-# xticks(np.arange(0, ufo_vel.shape[1], 10), np.round(xb[::10], 3))
-# yticks(np.arange(0, ufo_vel.shape[2], 10), np.round(yb[::10], 3))
-
-# subplot(gs2[1,1])
-# tmp1 = ufo_vel.mean(0).mean(1)[0:-1]
-# semilogy(tmp1/tmp1.sum(), yb[0:-1])
-# tmp2 = ang_lin.mean(0).mean(1)[0:-1]
-# semilogy(tmp2/tmp2.sum(), yb[0:-1])
-
-# subplot(gs[1,1])
-
-# imshow(ang_lin.mean(0)[0:-1,0:-1], cmap='jet', origin='lower', aspect='auto')
-# title("occupancy")
-# xlabel("Linear (cm/s)")
-# ylabel("Angular (rad/s)")
-# xticks(np.arange(0, ufo_vel.shape[1], 10), np.round(xb[::10], 3))
-# yticks(np.arange(0, ufo_vel.shape[2], 10), np.round(yb[::10], 3))
-
-
-# tight_layout()
-
-# savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/Corr_speed.png"))
-# show()
-
-
-
-
-
+figure()
+for i, s in enumerate(tuning_curves_ufo.keys()):
+    subplot(6, 11, i+1, projection='polar')
+    plot(tuning_curves_ufo[s])
+show()
 
 

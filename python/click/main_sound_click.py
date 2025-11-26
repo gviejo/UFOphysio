@@ -13,10 +13,11 @@ from pycircstat.descriptive import mean as circmean
 import _pickle as cPickle
 from matplotlib.gridspec import GridSpec
 from itertools import combinations
+
 sys.path.append("../")
-from functions import *
-# import pynacollada as pyna
 from ufo_detection import *
+from functions import *
+from matplotlib.pyplot import *
 import yaml
 
 ############################################################################################### 
@@ -31,90 +32,161 @@ elif os.path.exists('/mnt/ceph/users/gviejo'):
 elif os.path.exists('/media/guillaume/Raid2'):
     data_directory = '/media/guillaume/Raid2'
 
-alldatasets = yaml.safe_load(open(os.path.join(data_directory,'datasets_SOUND.yaml'), 'r'))
-
-datasets = alldatasets["click_10s"] + alldatasets["click_5s"]
-
-ufo_channels = np.genfromtxt(os.path.join(data_directory, 'channels_UFO.txt'), delimiter = ' ', dtype = str, comments = '#')
-ufo_channels = {a[0]:a[1:].astype('int') for a in ufo_channels}
+alldatasets = yaml.safe_load(open(os.path.join(data_directory,'datasets_SOUND.yaml'), 'r'))['struct']
 
 
-ccs = {'wak':[], 'sws':[]}
+ccs = {
+    "wak": {
+        "adn": {},
+        "lmn": {},
+        "ds":  {}
+    },
+    "sws": {
+        "adn": {},
+        "lmn": {},
+        "ds": {}
+    }
+}
 
-peths = {}
+peths = {
+    "adn": {},
+    "lmn": {},
+    "ds": {}
+}
 
-for s in datasets:
-    print(s)
-    ############################################################################################### 
-    # LOADING DATA
-    ###############################################################################################
-    path = os.path.join(data_directory, s)
-    data = ntm.load_session(path, 'neurosuite')
-    spikes = data.spikes
-    position = data.position
-    wake_ep = data.epochs['wake']    
-    sws_ep = data.read_neuroscope_intervals('sws')    
-    
-    idx = spikes._metadata[spikes._metadata["location"].str.contains("lmn")].index.values
-    spikes = spikes[idx]
+for struct in alldatasets.keys():
+# for struct in ["adn"]:
+    print(f"{struct}")
 
-    
-    ufo_ep, ufo_tsd = loadUFOs(path)
+    datasets = alldatasets[struct]["click_10s"]
+    if "click_5s" in alldatasets[struct].keys():
+        datasets += alldatasets[struct]["click_5s"]
 
-    analogin, ts = get_memory_map(os.path.join(data.path, data.basename+"_0_analogin.dat"), 2, frequency=20000)
-    peaks,_ = scipy.signal.find_peaks(np.diff(analogin[:,0]), height=2000)
-    peaks+=1    
+    for ss in datasets:
+        s = ss[0]
+        print(s)
+        ###############################################################################################
+        # LOADING DATA
+        ###############################################################################################
+        path = os.path.join(data_directory, s)
+        data = ntm.load_session(path, 'neurosuite')
+        spikes = data.spikes
+        position = data.position
+        wake_ep = data.epochs['wake']
+        sleep_ep = data.epochs['sleep']
+        sws_ep = data.read_neuroscope_intervals('sws')
 
-    ttl = nap.Ts(t=ts[peaks])
-    ttl.save(data.path + "/ttl_sound")
+        ufo_ep, ufo_ts = loadUFOs(path)
 
-    for e, ep in zip(['wak', 'sws'], [wake_ep, sws_ep]):
-        cc = nap.compute_eventcorrelogram(
-            nap.TsGroup({0:ufo_tsd}), 
-            ttl, 0.001, 0.1, ep = ep, norm=True)
+        # LMN default
+        n_channels = 2
+        epoch_int = 0
 
-        ccs[e].append(cc)#/len(ttl.restrict(ep))
+        if struct == "adn":
+            ds_ep, ds_ts = loadDentateSpikes(path)
 
-    peth = nap.compute_perievent(
-        nap.TsGroup({0:ufo_tsd.restrict(sws_ep)}), 
-        ttl.restrict(sws_ep), 0.1)
+            epoch_int = ss[1]
+            n_channels = ss[2]
 
-    peths[s] = peth[0]
+        analogin, ts = get_memory_map(os.path.join(data.path, data.basename+"_"+str(epoch_int)+"_analogin.dat"), n_channels, frequency=20000)
+        peaks,_ = scipy.signal.find_peaks(np.diff(analogin[:,0]), height=2000)
+        peaks+=1
+        ttl = nap.Ts(t=ts[peaks])
 
-    # Writing for neuroscope
-    peaks2 = ttl.as_units('ms').index.values
-    datatowrite = peaks2
-    n = len(peaks2)
-    texttowrite = np.repeat(np.array(['SOUND 1']), n)    
-    evt_file = os.path.join(data.path, data.basename+'.evt.py.snd')
-    f = open(evt_file, 'w')
-    for t, n in zip(datatowrite, texttowrite):
-        f.writelines("{:1.6f}".format(t) + "\t" + n + "\n")
-    f.close()
+        # Adding intervals if epoch_int is not 0
+        if epoch_int != 0:
+            epochs = pd.read_csv(os.path.join(data.path, "Epoch_TS.csv"), index_col=False, header=None).values
+            start = np.sum(np.diff(epochs, 1)[0:epoch_int])
+            ttl = nap.Ts(t = ttl.t + start)
+
+        assert len(ttl) > 0, "No sound TTL found!"
+        print(np.mean(np.diff(ttl.t)), np.std(np.diff(ttl.t)))
+
+        if struct == "adn":
+            assert np.std(np.diff(ttl.t)) < 0.1, "TTLs are not regular!"
+
+        ttl.save(data.path + "/ttl_sound")
+
+
+        ###############################################################################################
+        group = {0:ufo_ts}
+        if struct == "adn":
+            group[1] = ds_ts
+        group = nap.TsGroup(group)
+
+        # CCG
+        for e, ep in zip(['wak', 'sws'], [wake_ep, sleep_ep]):
+            cc = nap.compute_eventcorrelogram(
+                group,
+                ttl, 0.001, 0.2, ep=ep, norm=True
+            )
+
+            ccs[e][struct][s] = cc[0] #/len(ttl.restrict(ep))
+
+            if struct == "adn":
+                ccs[e]['ds'][s] = cc[1]#/len(ttl.restrict(ep))
+
+        # PETH
+        peth = nap.compute_perievent(
+            group,
+            ttl.restrict(sws_ep), 0.1)
+
+        peths[struct][s] = peth[0]
+        if struct == "adn":
+            peths["ds"][s] = peth[1]
+
+        # Writing for neuroscope
+        peaks2 = ttl.as_units('ms').index.values
+        datatowrite = peaks2
+        n = len(peaks2)
+        texttowrite = np.repeat(np.array(['SOUND 1']), n)
+        evt_file = os.path.join(data.path, data.basename+'.evt.py.snd')
+        f = open(evt_file, 'w')
+        for t, n in zip(datatowrite, texttowrite):
+            f.writelines("{:1.6f}".format(t) + "\t" + n + "\n")
+        f.close()
+
+
 
 for e in ccs.keys():
-    ccs[e] = pd.concat(ccs[e], 1)
+    for struct in ccs[e].keys():
+        ccs[e][struct] = pd.DataFrame.from_dict(ccs[e][struct])
 
-figure()
-subplot(211)
-for s in peths.keys():
-    plot(peths[s].to_tsd(), 'o')
-ylabel("Trial")
-axvline(0)
-xlim(-0.1, 0.1)
-subplot(212)
-plot(ccs['sws'], label = "UFO")
-xlim(-0.1, 0.1)
-axvline(0)
-xlabel("Sound time")
-ylabel("UFO/SOUND")
+
+figure(figsize=(12,6))
+gs = GridSpec(2,3)
+for i, struct in enumerate(['lmn', 'adn', 'ds']):
+    e = "sws"
+    subplot(gs[0,i])
+    count = 0
+    for j ,s in enumerate(peths[struct].keys()):
+        gr = peths[struct][s]
+        plot(gr.to_tsd(np.arange(0, len(gr))+count+1), 'o', markersize=1)
+        count += len(gr)
+
+    ylabel("Trial")
+    axvline(0)
+    xlim(-0.1, 0.1)
+    title(struct)
+
+    subplot(gs[1,i])
+    plot(ccs[e][struct], alpha=0.3, linewidth=1)
+    plot(ccs[e][struct].mean(1), color='k', linewidth=1)
+    axvline(0)
+    xlim(-0.1, 0.1)
+    if i == 0:
+        ylabel("UFO / Sound CCG")
 tight_layout()
-show()
 
+savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/Cross-corr_sound.pdf"))
+
+
+
+###############################################################################################
 # Saving
 datatosave = {
     "ccs":ccs,
-    "peths":{s:peths[s].to_tsd().as_series() for s in peths.keys()}
+    "peths":{struct:{s:peths[struct][s].to_tsd().as_series() for s in peths[struct].keys()} for struct in peths.keys()}
 }
 
 import _pickle as cPickle

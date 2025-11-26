@@ -16,6 +16,8 @@ from itertools import combinations
 from functions import *
 # import pynacollada as pyna
 from ufo_detection import *
+import warnings
+warnings.filterwarnings("ignore")
 
 ############################################################################################### 
 # GENERAL infos
@@ -33,28 +35,31 @@ datasets = np.hstack([
     np.genfromtxt(os.path.join(data_directory,'datasets_LMN.list'), delimiter = '\n', dtype = str, comments = '#'),
     np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ADN.list'), delimiter = '\n', dtype = str, comments = '#'),
     np.genfromtxt(os.path.join(data_directory,'datasets_LMN_PSB.list'), delimiter = '\n', dtype = str, comments = '#'),
-    # np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ripples.list'), delimiter = '\n', dtype = str, comments = '#'),
+    np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ripples.list'), delimiter = '\n', dtype = str, comments = '#'),
+    np.genfromtxt(os.path.join(data_directory,'datasets_ADN_DG.list'), delimiter = '\n', dtype = str, comments = '#'),
     ])
 
 ufo_channels = np.genfromtxt(os.path.join(data_directory, 'channels_UFO.txt'), delimiter = ' ', dtype = str, comments = '#')
 ufo_channels = {a[0]:a[1:].astype('int') for a in ufo_channels}
 
 
-datasets = [#"LMN-ADN/A5044/A5044-240401B",
+# datasets = [#"LMN-ADN/A5044/A5044-240401B",
             # "OPTO/B3000/B3007/B3007-240501A",
             # "OPTO/B3000/B3009/B3009-240502C",
             # "OPTO/B3000/B3010/B3010-240510C",
             # "LMN-ADN/A5044/A5044-240403B",
             # "OPTO/B3000/B3007/B3007-240502A",
             # "OPTO/B3000/B3009/B3009-240503C",
-            "OPTO/B3000/B3010/B3010-240511A"]
+            # "OPTO/B3000/B3010/B3010-240511A"]
+
 
 # for s in datasets[19:]:
 # for s in ['LMN/A1411/A1411-200910A']:
+# for s in ['ADN-HPC/B3214/B3218-241018']:
+for s in ["ADN-HPC/B5100/B5102/B5102-250915"]:
 # for s in datasets:
-for s in ['ADN-HPC/B3214/B3218-241018']:
-    print(s)
-    sys.exit()
+
+
     ############################################################################################### 
     # LOADING DATA
     ###############################################################################################
@@ -63,22 +68,17 @@ for s in ['ADN-HPC/B3214/B3218-241018']:
     spikes = data.spikes
     position = data.position
     wake_ep = data.epochs['wake']
-    #sws_ep = data.read_neuroscope_intervals('sws')    
-    
-    idx = spikes._metadata[spikes._metadata["location"].str.contains("lmn")].index.values
-    spikes = spikes[idx]
+    #sws_ep = data.read_neuroscope_intervals('sws')
 
-    
     ufo_ep, ufo_ts = loadUFOs(path)
 
-    # if ufo_ep is None:        
+    if s not in ufo_channels.keys():
+        print("No UFO channels specified for this session {}".format(s))
+        break
+
+    # if ufo_ep is None:
     if True:
-        ############################################################################################### 
-        # COMPUTING TUNING CURVES
-        ###############################################################################################
-        tuning_curves = nap.compute_1d_tuning_curves(spikes, position['ry'], 120, minmax=(0, 2*np.pi), ep = position.time_support.loc[[0]])
-        # tuning_curves = smoothAngularTuningCurves(tuning_curves, 20, 4)
-        
+
         ###############################################################################################
         # MEMORY MAP
         ###############################################################################################

@@ -17,6 +17,7 @@ from matplotlib.colors import hsv_to_rgb
 # import xgboost as xgb
 import warnings
 warnings.filterwarnings("ignore")
+import xarray as xr
 
 def getAllInfos(data_directory, datasets):
     allm = np.unique(["/".join(s.split("/")[0:2]) for s in datasets])
@@ -28,6 +29,25 @@ def getAllInfos(data_directory, datasets):
     return infos
 
 def smoothAngularTuningCurves(tuning_curves, window = 20, deviation = 3.0):
+    new_tuning_curves = tuning_curves.copy(deep=True)
+    tmp = []
+    for i in tuning_curves.unit:
+        tcurves = tuning_curves.sel(unit=i)
+        index = tcurves.coords[tcurves.dims[0]].values
+        offset = np.mean(np.diff(index))
+        padded  = pd.Series(index = np.hstack((index-(2*np.pi)-offset,
+                                                index,
+                                                index+(2*np.pi)+offset)),
+                            data = np.hstack((tcurves.values, tcurves.values, tcurves.values)))
+        smoothed = padded.rolling(window=window,win_type='gaussian',center=True,min_periods=1).mean(std=deviation)
+        tmp.append(smoothed.loc[index])
+
+    new_tuning_curves.values = np.array(tmp)
+
+    return new_tuning_curves
+
+
+def smoothAngularTuningCurves_old(tuning_curves, window = 20, deviation = 3.0):
     new_tuning_curves = {}  
     for i in tuning_curves.columns:
         tcurves = tuning_curves[i]
@@ -201,16 +221,16 @@ def centerTuningCurves(tcurve):
     """
     center tuning curves by peak
     """
-    peak            = pd.Series(index=tcurve.columns,data = np.array([circmean(tcurve.index.values, tcurve[i].values) for i in tcurve.columns]))
-    new_tcurve      = []
-    for p in tcurve.columns:    
-        x = tcurve[p].index.values - tcurve[p].index[tcurve[p].index.get_loc(peak[p], method='nearest')]
-        x[x<-np.pi] += 2*np.pi
-        x[x>np.pi] -= 2*np.pi
-        tmp = pd.Series(index = x, data = tcurve[p].values).sort_index()
-        new_tcurve.append(tmp.values)
-    new_tcurve = pd.DataFrame(index = np.linspace(-np.pi, np.pi, tcurve.shape[0]+1)[0:-1], data = np.array(new_tcurve).T, columns = tcurve.columns)
-    return new_tcurve
+    idxmax = np.argmax(tcurve.values, axis=1)
+    shift = tcurve.shape[1]//2 - idxmax
+    new_tcurve = np.zeros_like(tcurve.values)
+    for i in range(tcurve.shape[0]):
+        new_tcurve[i,:] = np.roll(tcurve.values[i,:], shift[i])
+
+    new_index = np.linspace(-np.pi, np.pi, tcurve.shape[1], endpoint=False)
+    new_coords = {tcurve.dims[1]: new_index, tcurve.dims[0]: tcurve.coords[tcurve.dims[0]].values}
+    return xr.DataArray(data=new_tcurve, coords=new_coords, dims=tcurve.dims)
+
 
 def compute_ISI_HD(spikes, angle, ep, bins):
     nb_bin_hd = 31
@@ -275,3 +295,145 @@ def decode_xgb(spikes, eptrain, bin_size_train, eptest, bin_size_test, angle, st
     angle_predi, proba, bst = xgb_decodage(Xr=rate_train, Yr=angle2, Xt=rate_test)
 
     return angle_predi, proba
+
+def loadXML(path):
+    """
+    path should be the folder session containing the XML file
+    Function returns :
+        1. the number of channels
+        2. the sampling frequency of the dat file or the eeg file depending of what is present in the folder
+            eeg file first if both are present or both are absent
+        3. the mappings shanks to channels as a dict
+    Args:
+        path : string
+    Returns:
+        int, int, dict
+    """
+    if not os.path.exists(path):
+        print("The path " + path + " doesn't exist; Exiting ...")
+        sys.exit()
+    listdir = os.listdir(path)
+    xmlfiles = [f for f in listdir if f.endswith('.xml')]
+    if not len(xmlfiles):
+        print("Folder contains no xml files; Exiting ...")
+        sys.exit()
+    new_path = os.path.join(path, xmlfiles[0])
+
+    from xml.dom import minidom
+    xmldoc = minidom.parse(new_path)
+    nChannels = xmldoc.getElementsByTagName('acquisitionSystem')[0].getElementsByTagName('nChannels')[0].firstChild.data
+    fs_dat = xmldoc.getElementsByTagName('acquisitionSystem')[0].getElementsByTagName('samplingRate')[0].firstChild.data
+    fs_eeg = xmldoc.getElementsByTagName('fieldPotentials')[0].getElementsByTagName('lfpSamplingRate')[
+        0].firstChild.data
+    if os.path.splitext(xmlfiles[0])[0] + '.dat' in listdir:
+        fs = fs_dat
+    elif os.path.splitext(xmlfiles[0])[0] + '.eeg' in listdir:
+        fs = fs_eeg
+    else:
+        fs = fs_eeg
+    shank_to_channel = {}
+    shank_to_keep = {}
+    groups = xmldoc.getElementsByTagName('anatomicalDescription')[0].getElementsByTagName('channelGroups')[
+        0].getElementsByTagName('group')
+    for i in range(len(groups)):
+        shank_to_channel[i] = []
+        shank_to_keep[i] = []
+        for child in groups[i].getElementsByTagName('channel'):
+            shank_to_channel[i].append(int(child.firstChild.data))
+            tmp = child.toprettyxml()
+            shank_to_keep[i].append(int(tmp[15]))
+
+        # shank_to_channel[i] = np.array([int(child.firstChild.data) for child in groups[i].getElementsByTagName('channel')])
+        shank_to_channel[i] = np.array(shank_to_channel[i])
+        shank_to_keep[i] = np.array(shank_to_keep[i])
+        shank_to_keep[i] = shank_to_keep[i] == 0  # ugly
+    return int(nChannels), int(fs), shank_to_channel, shank_to_keep
+
+def load_mean_waveforms(path):
+    """
+    load waveforms
+    quick and dirty
+    """
+    import scipy.io
+    if not os.path.exists(path):
+        print("The path "+path+" doesn't exist; Exiting ...")
+        sys.exit()
+    new_path = os.path.join(path, 'Analysis/')
+    if os.path.exists(new_path):
+        new_path    = os.path.join(path, 'Analysis/')
+        files        = os.listdir(new_path)
+        if "MeanWaveForms.npz" in files:
+            tmp = np.load(os.path.join(new_path, 'MeanWaveForms.npz'), allow_pickle=True)
+            meanwavef = tmp['meanwavef'].item()
+            maxch = tmp['maxch'].item()
+            return meanwavef, maxch
+
+    # Creating /Analysis/ Folder here if not already present
+    if not os.path.exists(new_path):
+        os.makedirs(new_path)
+
+    files = os.listdir(path)
+    clu_files     = np.sort([f for f in files if 'clu' in f and f[0] != '.'])
+    spk_files	  = np.sort([f for f in files if 'spk' in f and f[0] != '.'])
+    clu1         = np.sort([int(f.split(".")[-1]) for f in clu_files])
+    clu2         = np.sort([int(f.split(".")[-1]) for f in spk_files])
+    if len(clu_files) != len(spk_files) or not (clu1 == clu2).any():
+        print("Not the same number of clu and res files in "+path+"; Exiting ...")
+        sys.exit()
+
+    # XML INFO
+    n_channels, fs, shank_to_channel, shank_to_keep = loadXML(path)
+    from xml.dom import minidom
+    xmlfile = os.path.join(path, [f for f in files if f.endswith('.xml')][0])
+    xmldoc 		= minidom.parse(xmlfile)
+    nSamples 	= int(xmldoc.getElementsByTagName('nSamples')[0].firstChild.data) # assuming constant nSamples
+
+    import xml.etree.ElementTree as ET
+    root = ET.parse(xmlfile).getroot()
+
+
+    count = 0
+    meanwavef = {}
+    maxch = {}
+    for i, s in zip(range(len(clu_files)),clu1):
+        clu = np.genfromtxt(os.path.join(path,clu_files[i]),dtype=np.int32)[1:]
+        mwf = []
+        mch = []
+        if np.max(clu)>1:
+            # load waveforms
+            file = os.path.join(path, spk_files[i])
+            f = open(file, 'rb')
+            startoffile = f.seek(0, 0)
+            endoffile = f.seek(0, 2)
+            bytes_size = 2
+            n_samples = int((endoffile-startoffile)/bytes_size)
+            f.close()
+            n_channel = len(root.findall('spikeDetection/channelGroups/group')[s-1].findall('channels')[0])
+
+            data = np.memmap(file, np.int16, 'r', shape = (len(clu), nSamples, n_channel))
+
+            #data = np.fromfile(open(file, 'rb'), np.int16)
+            #data = data.reshape(len(clu),nSamples,n_channel)
+
+            tmp = np.unique(clu).astype(int)
+            idx_clu = tmp[tmp>1]
+            idx_col = np.arange(count, count+len(idx_clu))
+            for j,k in zip(idx_clu, idx_col):
+                # take only a subsample of spike if too big
+                idx = np.sort(np.random.choice(np.where(clu==j)[0], 100))
+                meanw = data[idx,:,:].mean(0)
+                ch = np.argmax(np.max(np.abs(meanw), 0))
+                mwf.append(meanw)
+                mch.append(ch)
+            mwf = np.array(mwf)
+            # mch = pd.Series(index = idx_col, data = mch)
+            count += len(idx_clu)
+            meanwavef[i] = mwf
+            maxch[i] = np.array(mch)
+
+    # meanwavef = pd.concat(meanwavef, axis=1)
+    # maxch = pd.concat(maxch)
+    # meanwavef.to_hdf(os.path.join(new_path, 'MeanWaveForms.h5'), key='waveforms', mode='w')
+    # maxch.to_hdf(os.path.join(new_path, 'MaxWaveForms.h5'), key='channel', mode='w')
+    np.savez(os.path.join(new_path, 'MeanWaveForms.npz'), meanwavef=meanwavef, maxch=maxch)
+    return meanwavef, maxch

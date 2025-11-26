@@ -174,7 +174,7 @@ def detect_ufos(fp, sign_channels, ctrl_channels, timestep):
 def detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep):
 
     frequency = 20000
-    freq_band = (500, 1000)
+    freq_band = (600, 3000)
     wsize = 41
     thres_band = (3, 100)    
     duration_band = (2, 30)
@@ -379,6 +379,23 @@ def loadRipples(path):
     return (nap.IntervalSet(ripples[:,0], ripples[:,2], time_units = 's'), 
             nap.Ts(ripples[:,1], time_units = 's'))
 
+def loadDentateSpikes(path):
+    """
+    Name of the file should end with .evt.py.dsp
+    """
+    import os
+    name = path.split("/")[-1]
+    files = os.listdir(path)
+    filename = os.path.join(path, name+'.evt.py.dsp')
+    # if name+'.evt.py.ufo' in files:
+    try:
+        tmp = np.genfromtxt(path + '/' + name + '.evt.py.dsp')[:,0]
+        ripples = tmp.reshape(len(tmp)//3,3)/1000
+        return (nap.IntervalSet(ripples[:,0], ripples[:,2], time_units = 's'),
+                nap.Ts(ripples[:,1], time_units = 's'))
+    except:
+        print("No dentate spikes in ", path)
+        return None, None
 
 
 # def downsample(tsd, up, down):
