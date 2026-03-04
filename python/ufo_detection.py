@@ -52,7 +52,7 @@ def _butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
 
 def compute_power(fp, timestep, chs, freq_band, frequency=20000, wsize=41):
 
-    batch_size = frequency*100
+    batch_size = frequency*250
     starts = np.arange(0, len(timestep), batch_size)
 
     all_batch = np.zeros(len(timestep))

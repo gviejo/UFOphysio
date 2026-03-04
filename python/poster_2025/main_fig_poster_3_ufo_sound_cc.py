@@ -237,7 +237,7 @@ gs_peth = gridspec.GridSpecFromSubplotSpec(4, 2,
 data = cPickle.load(open(os.path.expanduser("~/Dropbox/UFOPhysio/figures/poster/cc_sound.pickle"), 'rb'))
 
 peths = data['peths']
-ccs = data['ccs']
+ccs = data['ccs_turns']
 
 
 # top = cm.get_cmap('Oranges_r', 128)

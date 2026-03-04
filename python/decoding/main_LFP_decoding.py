@@ -17,21 +17,21 @@ from itertools import combinations
 
 from sklearn.decomposition import KernelPCA
 
-from functions import *
-from ufo_detection import *
+from ..functions.functions import *
+from ..ufo_detection import *
 from scipy import signal
 import functools
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 
-############################################################################################### 
+###############################################################################################
 # GENERAL infos
 ###############################################################################################
 if os.path.exists("/mnt/Data/Data/"):
     data_directory = "/mnt/Data/Data"
-elif os.path.exists('/mnt/DataRAID2/'):    
+elif os.path.exists('/mnt/DataRAID2/'):
     data_directory = '/mnt/DataRAID2/'
-elif os.path.exists('/mnt/ceph/users/gviejo'):    
+elif os.path.exists('/mnt/ceph/users/gviejo'):
     data_directory = '/mnt/ceph/users/gviejo'
 elif os.path.exists('/media/guillaume/Raid2'):
     data_directory = '/media/guillaume/Raid2'
@@ -41,10 +41,10 @@ datasets = np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ADN.list'), d
 mdpec = {}
 
 for s in datasets:
-# for s in ["LMN-ADN/A5043/A5043-230301A"]:
+for s in ["LMN-ADN/A5043/A5043-230301A"]:
 
     print(s)
-    ############################################################################################### 
+    ###############################################################################################
     # LOADING DATA
     ###############################################################################################
     path = os.path.join(data_directory, s)
@@ -138,3 +138,4 @@ savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/UFO_ADN-LMN_decoding_ang
 # imshow(P.values.T, aspect='auto', origin='lower', extent=[ep.start[0], ep.end[0], 0, 2 * np.pi], cmap='jet')
 # [axvline(t, color='r', lw=2) for t in ufo_ts.restrict(ep).t]
 # show()
+

@@ -185,7 +185,7 @@ savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/Cross-corr_sound.pdf"))
 ###############################################################################################
 # Saving
 datatosave = {
-    "ccs":ccs,
+    "ccs_turns":ccs,
     "peths":{struct:{s:peths[struct][s].to_tsd().as_series() for s in peths[struct].keys()} for struct in peths.keys()}
 }
 

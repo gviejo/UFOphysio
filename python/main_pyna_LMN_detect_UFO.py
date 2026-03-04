@@ -56,8 +56,8 @@ ufo_channels = {a[0]:a[1:].astype('int') for a in ufo_channels}
 # for s in datasets[19:]:
 # for s in ['LMN/A1411/A1411-200910A']:
 # for s in ['ADN-HPC/B3214/B3218-241018']:
-for s in ["ADN-HPC/B5100/B5102/B5102-250915"]:
-# for s in datasets:
+# for s in ["ADN-HPC/B5100/B5102/B5102-250915"]:
+for s in datasets:
 
 
     ############################################################################################### 
@@ -114,7 +114,7 @@ for s in ["ADN-HPC/B5100/B5102/B5102-250915"]:
         # Saving with pynapple
         ufo_ep.save(os.path.join(path, data.basename + '_ufo_ep'))
         ufo_tsd.save(os.path.join(path, data.basename + '_ufo_tsd'))
-        nSS = nSS.bin_average(1/5000)
+        # nSS = nSS.bin_average(1/5000)
         nSS.save(os.path.join(data.path, "nSS_LMN"))
 
 

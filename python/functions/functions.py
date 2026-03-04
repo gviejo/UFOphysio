@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-02-28 16:16:36
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-06-04 17:06:14
+# @Last Modified time: 2025-12-06 16:26:20
 import numpy as np
 from numba import jit
 import pandas as pd
@@ -111,7 +111,7 @@ def computeAngularVelocity(angle, ep, bin_size):
     """        
     tmp = np.unwrap(angle.restrict(ep).values)
     tmp = pd.Series(index=angle.restrict(ep).index.values, data=tmp)
-    tmp = tmp.rolling(window=100,win_type='gaussian',center=True,min_periods=1).mean(std=1.0)
+    tmp = tmp.rolling(window=100,win_type='gaussian',center=True,min_periods=1).mean(std=2.0)
     tmp = nap.Tsd(t = tmp.index.values, d = tmp.values)    
     tmp = tmp.bin_average(bin_size)
     t = tmp.index.values[0:-1]+np.diff(tmp.index.values)
@@ -437,3 +437,22 @@ def load_mean_waveforms(path):
     # maxch.to_hdf(os.path.join(new_path, 'MaxWaveForms.h5'), key='channel', mode='w')
     np.savez(os.path.join(new_path, 'MeanWaveForms.npz'), meanwavef=meanwavef, maxch=maxch)
     return meanwavef, maxch
+
+def weighted_circmean(angles, weights):
+    """
+    angles: array of angles in radians
+    weights: array of non-negative weights (same shape)
+    """
+    weights = np.asarray(weights)
+    angles = np.asarray(angles)
+
+    # Weighted complex sum
+    C = np.sum(weights * np.exp(1j * angles))
+
+    # Mean angle
+    mean_angle = np.angle(C)
+
+    # Resultant length (strength)
+    R = np.abs(C) / np.sum(weights)
+
+    return mean_angle, R
