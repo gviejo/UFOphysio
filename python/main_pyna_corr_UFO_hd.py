@@ -168,7 +168,9 @@ for k in range(ahv_ufo[s].shape[0]):
     tmp = np.array([ahv_ufo[s].iloc[k].values for i, s in enumerate(ahv_ufo.keys())])
     plot(shifts_t, tmp.mean(0), label=ahv_ufo[s].index[k])
     fill_between(shifts_t, tmp.mean(0)-tmp.std(0)/tmp.shape[0], tmp.mean(0)+tmp.std(0)/tmp.shape[0], alpha=0.3)
-    legend()    
+    legend()
+ylabel("P(UFO|AHV)")
+xlabel("Shift (s)")
 # show()
 savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/figUFO_AHV_tc_offset.pdf"))
 

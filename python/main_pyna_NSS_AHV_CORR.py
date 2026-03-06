@@ -157,9 +157,9 @@ for i, ep_name in enumerate(nss_turn.keys()):
             subplot(gs2[0, j])
             for turn in ["left", "right"]:
                 tmp = nss_turn[ep_name][loc][turn].iloc[:, k]
-                tmp = nap.Tsd(tmp).bin_average(0.0005).as_series()
-                plot(tmp, '-', color=colors[turn], label=turn)
-                fill_between(tmp.index, tmp - tmp.std(), tmp + tmp.std(), alpha=0.3, color=colors[turn])
+                tmp = nap.Tsd(tmp).bin_average(0.0005).smooth(0.01).as_series()
+                plot(tmp, '-', color=colors[turn], label=turn, linewidth=4)
+                # fill_between(tmp.index, tmp - tmp.std(), tmp + tmp.std(), alpha=0.3, color=colors[turn])
             legend()
             title(f"{ep_name.upper()} - {loc.upper()}")
             xlabel("Time from turn (s)")

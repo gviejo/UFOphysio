@@ -120,28 +120,52 @@ for s in datasets:
         # LMN UFOS
         ufo_ep_lmn, ufo_tsd_lmn = loadUFOs(path)
         nSS_lmn = nap.load_file(os.path.join(data.path, "nSS_LMN.npz"))
-        ufo_tsd_lmn = ufo_tsd_lmn.value_from(nSS_lmn)
+        # ufo_tsd_lmn = ufo_tsd_lmn.value_from(nSS_lmn)
+        ufo_tsd_lmn = ufo_tsd_lmn.restrict(nSS_lmn.time_support)
 
         # ADN UFOS
         ufo_tsd_adn = nap.load_file(os.path.join(path, data.basename + '_ufo_tsd_ADN.npz'))
+        ufo_tsd_adn = ufo_tsd_adn.restrict(nSS_lmn.time_support)
 
         # Taking only event above 4 std
-        ufo_tsd_adn = ufo_tsd_adn[ufo_tsd_adn > 4]
-        ufo_tsd_lmn = ufo_tsd_lmn[ufo_tsd_lmn > 4]
+        # ufo_tsd_adn = ufo_tsd_adn[ufo_tsd_adn > 4]
+        # ufo_tsd_lmn = ufo_tsd_lmn[ufo_tsd_lmn > 4]
 
         # Making categories
-        categories = {} # ADN events not paired with LMN
-
+        categories = {}
         window = 0.01
-        ep = nap.IntervalSet(ufo_tsd_adn.t - window, ufo_tsd_adn.t)
-        count = ufo_tsd_lmn.count(ep=ep)
-        # categories[0] = nap.Ts(count[count > 0].t + window/2) # ADN events paired with LMN
-        categories[0] = ufo_tsd_lmn
-        categories[1] = nap.Ts(count[count == 0].t - window/2) # ADN events not paired with LMN
-        # categories[2] = ufo_tsd_adn[ufo_tsd_adn.in_interval(ep) == 0]
-        categories = nap.TsGroup(categories, metadata={"name": ["LMN->ADN", "ADN"]})
 
-        if categories.rate.min() > 0.5:
+        tmp_adn = nap.Tsd(t=ufo_tsd_adn.t, d=np.arange(len(ufo_tsd_adn)), time_support=ufo_tsd_adn.time_support)
+        tmp_lmn = nap.Tsd(t=ufo_tsd_lmn.t, d=np.arange(len(ufo_tsd_lmn)), time_support=ufo_tsd_lmn.time_support)
+
+        diff = tmp_adn.t[ufo_tsd_lmn.value_from(tmp_adn)] - ufo_tsd_lmn.t
+
+        # LMN only
+        categories[0] = ufo_tsd_lmn[np.abs(diff) > window].value_from(nSS_lmn)  # LMN events not paired with ADN
+
+        # LMN followed by ADN
+        categories[1] = ufo_tsd_lmn[(diff > 0) & (diff < window)]  # LMN events paired with ADN
+
+        diff = tmp_lmn.t[ufo_tsd_adn.value_from(tmp_lmn)] - ufo_tsd_adn.t
+
+        # ADN only
+        categories[2] = ufo_tsd_adn[np.abs(diff) > window]  # ADN events not paired with LMN
+
+        # ADN followed by LMN
+        categories[3] = ufo_tsd_adn[(diff > 0) & (diff < window)]  # ADN events paired with LMN
+
+        # Grouping categories
+        categories = {
+            0: nap.Ts(np.sort(np.hstack((categories[0].t, categories[1].t)))),  # LMN events
+            1: nap.Ts(np.sort(np.hstack((categories[2].t, categories[3].t))))  # ADN events
+        }
+
+        categories = nap.TsGroup(categories,
+                                 metadata={"name": ["LMN->ADN", "ADN"]}
+                                 )
+
+
+        if categories.rate.min() > 0.2:
 
             print(s, categories)
 
@@ -205,6 +229,7 @@ for i, ep_name in enumerate(ahvs.keys()):
         fill_between(ahvs[ep_name][cat_name].index, ahvs[ep_name][cat_name].mean(axis=1) - ahvs[ep_name][cat_name].std(axis=1), ahvs[ep_name][cat_name].mean(axis=1) + ahvs[ep_name][cat_name].std(axis=1), alpha=0.3)
         title(f"{ep_name} - {cat_name}")
         ylabel("AHV (rad/s)")
+        xlabel("Time from UFO (s)")
         grid()
 
 for i, ep_name in enumerate(abs_ahvs.keys()):
@@ -215,6 +240,7 @@ for i, ep_name in enumerate(abs_ahvs.keys()):
         fill_between(abs_ahvs[ep_name][cat_name].index, abs_ahvs[ep_name][cat_name].mean(axis=1) - abs_ahvs[ep_name][cat_name].std(axis=1), abs_ahvs[ep_name][cat_name].mean(axis=1) + abs_ahvs[ep_name][cat_name].std(axis=1), alpha=0.3)
         title(f"{ep_name} - {cat_name}")
         ylabel("|AHV| (rad/s)")
+        xlabel("Time from UFO (s)")
         grid()
 
 tight_layout()
@@ -240,6 +266,7 @@ for i, ep_name in enumerate(ccs_turns.keys()):
             # fill_between(ccs_turns[ep_name][turn][cat_name].index, ccs_turns[ep_name][turn][cat_name].mean(axis=1) - ccs_turns[ep_name][turn][cat_name].std(axis=1), ccs_turns[ep_name][turn][cat_name].mean(axis=1) + ccs_turns[ep_name][turn][cat_name].std(axis=1), alpha=0.3, color=colors[ep_name])
         legend()
         title(f"{ep_name} - {cat_name}")
+        ylabel("Cross-correlogram UFO/turn")
         xlabel("Time from turn (s)")
         grid()
 

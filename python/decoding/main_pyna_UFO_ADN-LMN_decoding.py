@@ -92,7 +92,7 @@ for s in datasets:
                 data=spikes,
                 epochs = ep,
                 bin_size=0.005,
-                sliding_window_size=5,
+                sliding_window_size=3,
                 uniform_prior=True
             )
 
@@ -106,7 +106,7 @@ for s in datasets:
             # Xt = imap.fit_transform(X)
             #
             decoded2 = nap.Tsd(t=decoded.t, d=np.unwrap(decoded.values), time_support=decoded.time_support)
-            angspeed = decoded2.derivative().abs().smooth(0.02)
+            angspeed = decoded2.derivative()#.abs()#.smooth(0.02)
             dpec = nap.compute_perievent_continuous(angspeed, ufo_ts.restrict(ep), (-0.3, 0.3), ep=ep)
 
             mdpec[s] = np.nanmean(dpec, axis=1)
@@ -156,7 +156,7 @@ for s in datasets:
 
 
 
-mdpec2 = pd.concat([mdpec[s].as_series() for s in mdpec.keys()], axis=1)
+mdpec = pd.concat([mdpec[s].as_series() for s in mdpec.keys()], axis=1)
 
 
 
@@ -172,8 +172,8 @@ fill_between(mdpec.index, mdpec.mean(1)-mdpec.std(1), mdpec.mean(1)+mdpec.std(1)
 xlabel("Time from UFO (s)")
 ylabel("Angular speed (rad/s)")
 axvline(0)
-savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/UFO_ADN-LMN_decoding_angspeed.png"), dpi=300)
-
+savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/UFO_ADN-LMN_decoding_angspeed.pdf"), dpi=300)
+show()
 
 
 # fig = figure()
