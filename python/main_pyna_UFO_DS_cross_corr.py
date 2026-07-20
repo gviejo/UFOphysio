@@ -10,7 +10,7 @@ import pynapple as nap
 import nwbmatic as ntm
 from matplotlib.gridspec import GridSpecFromSubplotSpec
 
-from python.functions.functions import load_mean_waveforms
+from functions.functions import load_mean_waveforms
 from ufo_detection import *
 from matplotlib.pyplot import *
 
@@ -79,14 +79,14 @@ for s in datasets:
         cc_long[s] = ufo_cc[(0,1)]
         ufo_cc = nap.compute_crosscorrelogram(grp, 0.01, 0.5, sws_ep, norm=True)
         cc_short[s] = ufo_cc[(0,1)]
-        perievent[s] = nap.compute_perievent(ds_ts, ufo_ts.restrict(sws_ep), minmax=(-100, 100)).to_tsd()
+        perievent[s] = nap.compute_perievent(ds_ts, ufo_ts.restrict(sws_ep), window=(-100, 100)).to_tsd()
 
         # Reversed
         ufo_cc = nap.compute_crosscorrelogram(grp, 0.5, 100, sws_ep, norm=True, reverse=True)
         cc_long2[s] = ufo_cc[(1,0)]
         ufo_cc = nap.compute_crosscorrelogram(grp, 0.01, 1, sws_ep, norm=True, reverse=True)
         cc_short2[s] = ufo_cc[(1,0)]
-        perievent2[s] = nap.compute_perievent(ufo_ts, ds_ts.restrict(sws_ep), minmax=(-100, 100)).to_tsd()
+        perievent2[s] = nap.compute_perievent(ufo_ts, ds_ts.restrict(sws_ep), window=(-100, 100)).to_tsd()
 
         # Spikes cross-corr
         all_cc_ufo_dg[s] = {}
@@ -97,21 +97,23 @@ for s in datasets:
 
         # %%
         # How many ufos are followed by a ds between 0-100ms?
-        tmp = nap.compute_perievent(ds_ts, ufo_ts.restrict(sws_ep), minmax=(0, 0.1))
-        count = np.sum(~np.isnan(tmp.rate))
-        ratio = count/len(ufo_ts.restrict(sws_ep))
+        try:
+            tmp = nap.compute_perievent(ds_ts, ufo_ts.restrict(sws_ep), window=(0, 0.1))
+            count = np.sum(~np.isnan(tmp.rate))
+            ratio = count/len(ufo_ts.restrict(sws_ep))
 
-        # How many ds are preceded by a ufo between -50-5ms?
-        tmp = nap.compute_perievent(ufo_ts, ds_ts.restrict(sws_ep), minmax=(-0.1, 0.0))
-        count = np.sum(~np.isnan(tmp.rate))
-        ratio2 = count/len(ds_ts.restrict(sws_ep))
+            # How many ds are preceded by a ufo between -50-5ms?
+            tmp = nap.compute_perievent(ufo_ts, ds_ts.restrict(sws_ep), window=(-0.1, 0.0))
+            count = np.sum(~np.isnan(tmp.rate))
+            ratio2 = count/len(ds_ts.restrict(sws_ep))
 
-        ratios.append(pd.DataFrame(
-            index = [s.split("/")[-1]],
-            data = {"ufo_to_ds": ratio,
-                    "ds_to_ufo": ratio2,}
-        ))
-
+            ratios.append(pd.DataFrame(
+                index = [s.split("/")[-1]],
+                data = {"ufo_to_ds": ratio,
+                        "ds_to_ufo": ratio2,}
+            ))
+        except:
+            pass
 
 cc_long = pd.DataFrame.from_dict(cc_long)
 cc_short = pd.DataFrame.from_dict(cc_short)
@@ -131,8 +133,8 @@ cc_long = cc_long.rolling(window=20,win_type='gaussian',center=True,min_periods=
 cc_short = cc_short.rolling(window=20,win_type='gaussian',center=True,min_periods=1).mean(std=1)
 
 
-figure(figsize=(15,12))
-outergs = GridSpec(2, 1, wspace=0.3, hspace=0.3, height_ratios=[0.3, 0.7])
+figure(figsize=(15,22))
+outergs = GridSpec(2, 1, wspace=0.3, hspace=0.3, height_ratios=[0.1, 0.9])
 gs1 = GridSpecFromSubplotSpec(1, 2, subplot_spec=outergs[0], wspace=0.3, hspace=0.3)
 ax = subplot(gs1[0])
 plot(cc_long, alpha = 0.5, linewidth=1)
@@ -148,7 +150,7 @@ xlabel("ufo (s)")
 axvline(0)
 
 # gs2 = GridSpecFromSubplotSpec(len(datasets)//4, 4, subplot_spec=outergs[1], wspace=0.3, hspace=0.3)
-gs2 = GridSpecFromSubplotSpec(1, 4, subplot_spec=outergs[1], wspace=0.3, hspace=0.3)
+gs2 = GridSpecFromSubplotSpec(4, 4, subplot_spec=outergs[1], wspace=0.3, hspace=0.3)
 
 for i, s in enumerate(perievent.keys()):
     gs3 = GridSpecFromSubplotSpec(2, 1, subplot_spec=gs2[i//4, i%4], wspace=0.3, hspace=0.3)
@@ -189,7 +191,7 @@ plot(cc_short2.mean(1), linewidth = 4, color = 'red', label = "UFO")
 legend()
 xlabel("DS (s)")
 
-gs2 = GridSpecFromSubplotSpec(1, 4, subplot_spec=outergs[1], wspace=0.3, hspace=0.3)
+gs2 = GridSpecFromSubplotSpec(4, 4, subplot_spec=outergs[1], wspace=0.3, hspace=0.3)
 
 for i, s in enumerate(perievent.keys()):
     gs3 = GridSpecFromSubplotSpec(2, 1, subplot_spec=gs2[i//4, i%4], wspace=0.3, hspace=0.3)

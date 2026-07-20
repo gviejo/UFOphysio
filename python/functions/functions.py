@@ -10,7 +10,7 @@ import sys, os
 import scipy
 from scipy import signal
 from itertools import combinations
-from pycircstat.descriptive import mean as circmean
+# from pycircstat.descriptive import mean as circmean
 from pylab import *
 import pynapple as nap
 from matplotlib.colors import hsv_to_rgb
@@ -18,6 +18,30 @@ from matplotlib.colors import hsv_to_rgb
 import warnings
 warnings.filterwarnings("ignore")
 import xarray as xr
+
+
+def loadTTLPulse(file, n_channels = 1, channel = 0, fs = 20000):
+	"""
+		load ttl from analogin.dat
+	"""
+	f = open(file, 'rb')
+	startoffile = f.seek(0, 0)
+	endoffile = f.seek(0, 2)
+	bytes_size = 2
+	n_samples = int((endoffile-startoffile)/n_channels/bytes_size)
+	f.close()
+	with open(file, 'rb') as f:
+		data = np.fromfile(f, np.uint16).reshape((n_samples, n_channels))
+	if n_channels == 1:
+		data = data.flatten().astype(np.int32)
+	else:
+		data = data[:,channel].flatten().astype(np.int32)
+	peaks,_ = scipy.signal.find_peaks(np.diff(data), height=30000)
+	timestep = np.arange(0, len(data))/fs
+	analogin = pd.Series(index = timestep, data = data)
+	peaks+=1
+	ttl = pd.Series(index = timestep[peaks], data = data[peaks])
+	return ttl, analogin
 
 def getAllInfos(data_directory, datasets):
     allm = np.unique(["/".join(s.split("/")[0:2]) for s in datasets])

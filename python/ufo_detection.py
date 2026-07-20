@@ -171,13 +171,13 @@ def detect_ufos(fp, sign_channels, ctrl_channels, timestep):
 
     return ufo_ep, ufo_tsd
 
-def detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep):
+def detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep, thres_band=(3,100)):
 
     frequency = 20000
     freq_band = (600, 3000)
     wsize = 41
-    thres_band = (3, 100)    
-    duration_band = (2, 30)
+    # thres_band = (3, 100)
+    duration_band = (1, 30)
     min_inter_duration = 1
     
     meanSS =  compute_power(fp, timestep, sign_channels, freq_band)

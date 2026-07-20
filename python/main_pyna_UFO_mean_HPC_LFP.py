@@ -83,7 +83,7 @@ for s in datasets:
             tmp1 = lfp[:,c]
             # tmp1 = tmp1 - np.mean(tmp1)
             # tmp1 = tmp1 / np.std(tmp1)
-            tmp = nap.compute_perievent_continuous(tmp1, ufo_ts, minmax=(-1, 1))
+            tmp = nap.compute_perievent(tmp1, ufo_ts, window=(-1, 1))
             mean_lfp.append(np.nanmean(tmp, 1).d)
 
         mean_lfp = np.array(mean_lfp)
@@ -96,26 +96,75 @@ for s in datasets:
 ###############################################################################################
 # PLOTTING
 ###############################################################################################
+import matplotlib.pyplot as plt
+import matplotlib as mpl
 
-# T = tmp.t
-# x = np.arange(0, mean_lfp.shape[1], 2000)
+n_sessions = len(perilfp)
+ncols = 4
+nrows = int(np.ceil(n_sessions / ncols))
 
-figure(figsize=(16, 8))
-gs = GridSpec(3, 4, hspace=0.4, wspace=0.4)
+fig = plt.figure(figsize=(ncols * 5, nrows * 6))
+gs = GridSpec(nrows, ncols, hspace=0.5, wspace=0.45)
+
 for i, s in enumerate(perilfp.keys()):
     mean_lfp = perilfp[s]
-    gs2 = GridSpecFromSubplotSpec(2, 1, subplot_spec=gs[i//3, i%3], height_ratios=[0.5, 0.5], hspace=0.1)
-    subplot(gs2[0,0])
-    for j in range(mean_lfp.shape[1]):
-        plot(mean_lfp.index, mean_lfp.values[:,j]-j*100)
-    axvline(0)
-    title(s.split("/")[-1])
-    subplot(gs2[1,0])
-    imshow(mean_lfp.values.T, aspect='auto', extent=[mean_lfp.index[0], mean_lfp.index[-1], 0, mean_lfp.shape[1]])
-    # xticks(x, T[x])
-    # axvline(len(T)//2)
+    T = mean_lfp.index.values
+    n_ch = mean_lfp.shape[1]
 
-tight_layout()
+    gs2 = GridSpecFromSubplotSpec(
+        2, 1, subplot_spec=gs[i // ncols, i % ncols],
+        height_ratios=[1, 1], hspace=0.25
+    )
 
-savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/UFO_mean_HPC_LFP.pdf"))
+    # --- waterfall ---
+    ax0 = fig.add_subplot(gs2[0, 0])
+    offset = np.abs(mean_lfp.values).max() * 1.2
+    colors = mpl.colormaps["viridis"](np.linspace(0, 1, n_ch))
+    for j in range(n_ch):
+        ax0.plot(T, mean_lfp.values[:, j] - j * offset,
+                 color=colors[j], lw=0.8)
+    ax0.axvline(0, color="k", lw=1, ls="--", alpha=0.7)
+    ax0.set_xlim(T[0], T[-1])
+    ax0.set_yticks([])
+    ax0.set_ylabel("Channels", fontsize=7)
+    ax0.set_title(s.split("/")[-1], fontsize=8, fontweight="bold")
+    ax0.tick_params(labelbottom=False, bottom=False)
+    ax0.spines[["top", "right", "left"]].set_visible(False)
+
+    # --- heatmap ---
+    ax1 = fig.add_subplot(gs2[1, 0])
+    vmax = np.abs(mean_lfp.values).max()
+    im = ax1.imshow(
+        mean_lfp.values.T,
+        aspect="auto",
+        extent=[T[0], T[-1], n_ch - 0.5, -0.5],
+        origin="upper",
+        cmap="RdBu_r",
+        vmin=-vmax,
+        vmax=vmax,
+        interpolation="nearest",
+    )
+    ax1.axvline(0, color="k", lw=1, ls="--", alpha=0.7)
+    ax1.set_xlabel("Time from UFO (s)", fontsize=7)
+    ax1.set_ylabel("Channel", fontsize=7)
+    ax1.tick_params(labelsize=6)
+    ax1.spines[["top", "right"]].set_visible(False)
+
+    # shared colorbar
+    cb = plt.colorbar(im, ax=ax1, pad=0.02, fraction=0.046)
+    cb.ax.tick_params(labelsize=6)
+    cb.set_label("LFP (µV)", fontsize=6)
+
+fig.suptitle("Mean HPC LFP around UFOs", fontsize=11, fontweight="bold", y=1.01)
+
+plt.savefig(
+    os.path.expanduser("~/Dropbox/UFOPhysio/figures/UFO_mean_HPC_LFP.pdf"),
+    bbox_inches="tight",
+    dpi=150,
+)
+plt.savefig(
+    os.path.expanduser("~/Dropbox/UFOPhysio/figures/UFO_mean_HPC_LFP.png"),
+    bbox_inches="tight",
+    dpi=150,
+)
 

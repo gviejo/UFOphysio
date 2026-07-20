@@ -7,6 +7,7 @@ from matplotlib.gridspec import GridSpecFromSubplotSpec
 from python.functions.functions import load_mean_waveforms
 from ufo_detection import *
 from matplotlib.pyplot import *
+from sklearn.cluster import KMeans
 
 ###############################################################################################
 # GENERAL infos
@@ -22,10 +23,14 @@ elif os.path.exists('/media/guillaume/Raid2'):
 
 datasets = np.genfromtxt(os.path.join(data_directory,'datasets_ADN_DG.list'), delimiter = '\n', dtype = str, comments = '#')
 
+channels_separation = np.genfromtxt(os.path.join(data_directory, 'channels_CA1_DG.txt'), delimiter =' ', dtype = str, comments ='#')
+channels_separation = {a[0].split("/")[-1] : a[1].astype('int') for a in channels_separation}
+
 tuning_curves = {
 }
 
 maxchs = []
+ch_pos = {}
 
 for s in datasets:
 # for s in ['ADN-HPC/B5100/B5101/B5101-250502']:
@@ -34,33 +39,92 @@ for s in datasets:
     # LOADING DATA
     ###############################################################################################
     path = os.path.join(data_directory, s)
-    data = ntm.load_session(path, 'neurosuite')
-    spikes = data.spikes
-    position = data.position
-    wake_ep = data.epochs['wake']
-    sws_ep = data.read_neuroscope_intervals('sws')
-    #rem_ep = data.read_neuroscope_intervals('rem')
+
+    basename = os.path.basename(path)
+    filepath = os.path.join(path, "kilosort4", basename + ".nwb")
+    if os.path.exists(filepath):
+        nwb = nap.load_file(filepath)
+        spikes = nwb['units']
+        position = []
+        columns = ['x', 'y', 'z', 'rx', 'ry', 'rz']
+        for k in columns:
+            position.append(nwb[k].values)
+        position = np.array(position)
+        position = np.transpose(position)
+        position = nap.TsdFrame(
+            t=nwb['x'].t,
+            d=position,
+            columns=columns,
+            time_support=nwb['position_time_support'])
+
+        epochs = nwb['epochs']
+        wake_ep = epochs[epochs.tags == "wake"]
+
+        sws_ep = nwb['sws']
+        # rem_ep = nwb['rem']
+
+        # Waveform classification
+        meanwavef, maxch = load_mean_waveforms(os.path.join(path, "kilosort4"))
+        maxchs.append(maxch)
+        spikes.maxch = np.hstack([chs for chs in maxch.values()])
+
+        nwb.close()
+
+    else:
+
+        data = ntm.load_session(path, 'neurosuite')
+        spikes = data.spikes
+        position = data.position
+        wake_ep = data.epochs['wake']
+        sws_ep = data.read_neuroscope_intervals('sws')
+        #rem_ep = data.read_neuroscope_intervals('rem')
+        # Waveform classification
+        meanwavef, maxch = load_mean_waveforms(path)
+        maxchs.append(maxch)
+        spikes.maxch = np.hstack([chs for chs in maxch.values()])
+
+
+    spikes.location = [v.lower() for v in spikes.location.values]
     ufo_ep, ufo_ts = loadUFOs(path)
     ds_ep, ds_ts = loadDentateSpikes(path)
 
-    # Waveform classification
-    spikes.location = [v.lower() for v in spikes.location.values]
-    meanwavef, maxch = load_mean_waveforms(path)
-    maxchs.append(maxch)
-    spikes.maxch = np.hstack([chs for chs in maxch.values()])
+    # Separate CA1 and DG neurons based on maxch
     location = spikes.location.copy()
-    location[(spikes.maxch<30) & (spikes.location == "hpc")] = "ca1"
-    location[(spikes.maxch>=30) & (spikes.location == "hpc")] = "dg"
+    for i in location.index:
+            if spikes.location[i] == "hpc":
+                if spikes.maxch[i] < channels_separation[basename]:
+                    location[i] = "ca1"
+                else:
+                    location[i] = "dg"
     spikes.location = location
 
-    spikes = spikes[(spikes.location == 'adn') | (spikes.group == 0)]
 
-    spikes = spikes[spikes.rate > 1.0]
+    # maxch_values = spikes.maxch[location == "hpc"].values.reshape(-1, 1)
+    # idx = np.where(location == "hpc")[0]
+    # if len(maxch_values) > 0:
+    #     clu = KMeans(n_clusters=2, random_state=0).fit(maxch_values)
+    #     map_ = {np.argmin(clu.cluster_centers_.flatten()): "ca1", np.argmax(clu.cluster_centers_.flatten()): "dg"}
+    #     for i, label in enumerate(clu.labels_):
+    #         location[idx[i]] = map_[label]
+    #     # location[(spikes.maxch<30) & (spikes.location == "hpc")] = "ca1"
+    #     # location[(spikes.maxch>=30) & (spikes.location == "hpc")] = "dg"
+    #     spikes.location = location
+    # groups = spikes.metadata[['location', 'maxch']].groupby("location").groups
+    # ch_pos[s] = {loc: spikes.maxch[groups[loc]].values for loc in groups.keys()}
 
     ahv = nap.Tsd(position.t, np.unwrap(position['ry'])).derivative()
 
     new_wake_ep = wake_ep.intersect(np.abs(ahv).smooth(0.1).threshold(0.3).time_support)
 
+    tmp = {}
+    for g in meanwavef.keys():
+        for i in range(meanwavef[g].shape[0]):
+            n = spikes.index[spikes.group == g][i]
+            tmp[n] = meanwavef[g][i]
+
+    spikes = spikes[(spikes.location == 'adn') | (spikes.group == 0)]
+
+    spikes = spikes[spikes.rate > 1.0]
 
     ###############################################################################################
     # TUNING CURVES
@@ -77,6 +141,9 @@ for s in datasets:
             spikes, position.loc[['x', 'z']], bins=(12, 12), feature_names=['x', 'z']
         ),
         "location": spikes.location,
+        "maxch": spikes.maxch,
+        "meanwavef": tmp,
+        "group": spikes.group,
         "cc" : nap.compute_eventcorrelogram(
             spikes, ufo_ts, 0.002, 0.1, sws_ep, norm=True
         )
@@ -85,64 +152,88 @@ for s in datasets:
 
 
 #################################################################################################
-# Plot tuning curves
+# Plot tuning curves — one session per page
 #################################################################################################
-figure(figsize=(15, 200))
-
-# how many neurons per dataset
-total_n = sum([tuning_curves[s]['hd'].shape[0] for s in datasets])
-ncols = 3
-nrows = total_n // ncols + int(total_n % ncols > 0) + 2* len(datasets) + 1 # extra row between datasets
-
-gs = GridSpec(nrows, ncols, wspace=0.3, hspace=0.3)
-
-count = 0
+from matplotlib.backends.backend_pdf import PdfPages
 
 colors = {"adn":"red", "ca1":"green", "dg":"#ff7f0e", "hpc":"#2ca02c"}
+ncols = 3
 
-for i, s in enumerate(datasets):
-    n = tuning_curves[s]['hd'].shape[0]
+pdf_path = os.path.expanduser("~/Dropbox/UFOPhysio/figures/Tuning_curves_B51_ADDG.pdf")
 
-    for j in range(n):
-
-        gs3 = GridSpecFromSubplotSpec(2,3, subplot_spec=gs[count//ncols, count%ncols], wspace=0.3)
-
-        color = colors[tuning_curves[s]['location'].values[j]]
-
-        ax1 = subplot(gs3[0,0:2], projection='polar')
-        tc = tuning_curves[s]['hd'][j]
-        tc.plot(ax=ax1, color=color)
-        xticks([])
-        yticks([])
-
-        ax1 = subplot(gs3[1,0])
-        tc = tuning_curves[s]['ahv'][j]
-        tc.plot(ax=ax1, color=color)
-        xticks([])
-        # yticks([])
-        title("")
+with PdfPages(pdf_path) as pdf:
+    for s in datasets:
+        print("Plotting session {}".format(s))
 
 
-        ax2 = subplot(gs3[1,1])
-        tc = tuning_curves[s]['pf'][j]
-        tc.plot(ax=ax2, cmap='viridis')
-        ax2.set_aspect("equal")
-        xticks([])
-        yticks([])
-        title("")
+        order = ["ca1", "dg", "adn"]
+        neuron_ids = []
+        for group in order:
+            neuron_ids += tuning_curves[s]['location'][tuning_curves[s]['location'] == group].index.values.tolist()
 
-        ax3 = subplot(gs3[:,2])
-        cc = tuning_curves[s]['cc'].iloc[:,j]
-        plot(cc, color=color)
-        axvline(0, color='k', linestyle='--')
+        # # Sort by maxch & group
+        # # neuron_ids = tuning_curves[s]['maxch'].sort_values().index.values
+        # neuron_ids = []
+        # for group in np.unique(tuning_curves[s]['group']):
+        #     neuron_ids += tuning_curves[s]['maxch'][tuning_curves[s]['group'] == group].sort_values().index.values.tolist()
+        # neuron_ids = np.array(neuron_ids)
 
-        if j == 0:
-            title(s.split('/')[-1], fontsize=16)
+        n = len(neuron_ids)
+        if n == 0:
+            continue
 
-        count += 1
+        nrows = n // ncols + int(n % ncols > 0)
+        fig = figure(figsize=(40, nrows * 5))
+        fig.suptitle(s.split('/')[-1], fontsize=16, y=1.01)
 
-    count += 2 * ncols - (count % ncols)  # skip to next row
+        gs = GridSpec(nrows, ncols, wspace=0.3, hspace=0.5, figure=fig)
 
-subplots_adjust(top=0.98, bottom=0.02)
+        for j, nid in enumerate(neuron_ids):
+            gs3 = GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[j // ncols, j % ncols], wspace=0.3)
 
-savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/Tuning_curves_B51_ADDG.pdf"))
+            color = colors[tuning_curves[s]['location'][nid]]
+
+
+            ax0 = subplot(gs3[0, 0])
+            meanwavef = tuning_curves[s]['meanwavef'][nid]
+            imshow(meanwavef.T, aspect='auto', cmap='viridis')
+            if tuning_curves[s]['location'][nid] in ['ca1', 'dg']:
+                axhline(channels_separation[s.split('/')[-1]], color='w', linestyle='--')
+            xticks([])
+            yticks([0, meanwavef.shape[1]//2, meanwavef.shape[1]-1], [0, meanwavef.shape[1]//2, meanwavef.shape[1]])
+            title("group: {}, location: {}".format(tuning_curves[s]['group'][nid], tuning_curves[s]['location'][nid]))
+
+            ax1 = subplot(gs3[0, 1], projection='polar')
+            tc = tuning_curves[s]['hd'].sel(unit=nid)
+            tc.plot(ax=ax1, color=color)
+            xticks([])
+            yticks([])
+
+            ax2 = subplot(gs3[1, 0])
+            tc = tuning_curves[s]['ahv'].sel(unit=nid)
+            tc.plot(ax=ax2, color=color)
+            xticks([])
+            title("")
+
+            ax3 = subplot(gs3[1, 1])
+            tc = tuning_curves[s]['pf'].sel(unit=nid)
+            tc.plot(ax=ax3, cmap='viridis')
+            ax3.set_aspect("equal")
+            xticks([])
+            yticks([])
+
+
+            ax4 = subplot(gs3[:, 2])
+            cc = tuning_curves[s]['cc'][nid]
+            plot(cc, color=color)
+            axvline(0, color='k', linestyle='--')
+            xlabel("Ufo")
+
+        subplots_adjust(top=0.95, bottom=0.02)
+        pdf.savefig(fig, bbox_inches='tight')
+        close(fig)
+
+    # # Plot maxch distribution
+    # n = len(ch_pos)
+    # ncols = 4
+    # nrows = n // ncols + int(n % ncols
