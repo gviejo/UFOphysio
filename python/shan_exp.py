@@ -4,7 +4,7 @@ import scipy
 from pynaviz import scope
 import numpy as np
 import pandas as pd
-from ufo_detection import *
+from detection import *
 from matplotlib.pyplot import *
 from matplotlib.backends.backend_pdf import PdfPages
 

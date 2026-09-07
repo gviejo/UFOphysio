@@ -5,7 +5,7 @@ import nwbmatic as ntm
 from matplotlib.gridspec import GridSpecFromSubplotSpec
 
 from functions.functions import load_mean_waveforms
-from ufo_detection import *
+from detection import *
 from matplotlib.pyplot import *
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE

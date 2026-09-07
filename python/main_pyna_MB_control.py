@@ -14,7 +14,7 @@ import _pickle as cPickle
 from matplotlib.gridspec import GridSpec
 from itertools import combinations
 from functions import *
-from ufo_detection import *
+from detection import *
 from scipy.signal import hilbert
 
 # def _butter_bandpass(lowcut, highcut, fs, order=5):

@@ -14,7 +14,7 @@ import matplotlib.gridspec as gridspec
 from itertools import combinations
 from functions import *
 import pynacollada as pyna
-from ufo_detection import *
+from detection import *
 
 def simpleaxis(ax):
     ax.spines['top'].set_visible(False)

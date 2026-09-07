@@ -16,7 +16,7 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from itertools import combinations
 from functions import *
 import pynacollada as pyna
-from ufo_detection import *
+from detection import *
 from scipy.signal import hilbert
 
 ############################################################################################### 

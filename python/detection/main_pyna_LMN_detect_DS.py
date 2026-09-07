@@ -11,6 +11,8 @@ import nwbmatic as ntm
 import sys, os
 # from pycircstat.descriptive import mean as circmean
 # import _pickle as cPickle
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.gridspec import GridSpec
 from itertools import combinations
 from functions import *
@@ -41,13 +43,14 @@ datasets = np.genfromtxt(os.path.join(data_directory,'datasets_ADN_DG.list'), de
 with open(os.path.join(data_directory, 'channels_DS.txt'), 'r') as f:
     ds_channels = yaml.safe_load(f)
 
+pdf = PdfPages(os.path.join("/home/gviejo/Dropbox/UFOPhysio/figures", "DS_detection_summary.pdf"))
 
-# for s in datasets[-5:]:
+for s in datasets:
 # for s in ["ADN-HPC/B5100/B5102/B5102-250918"]:
 # for s in ["ADN-HPC/B5100/B5107/B5107-260218"]:
 # for s in ["ADN-HPC/B5100/B5101/B5101-250502"]:
-for s in ["ADN-HPC/B5100/B5107/B5107-260217"]:
-
+# for s in ["ADN-HPC/B5100/B5107/B5107-260217"]:
+    print("Processing session {}".format(s))
     ############################################################################################### 
     # LOADING DATA
     ###############################################################################################
@@ -57,7 +60,8 @@ for s in ["ADN-HPC/B5100/B5107/B5107-260217"]:
     spikes = data.spikes
     position = data.position
     wake_ep = data.epochs['wake']
-    #sws_ep = data.read_neuroscope_intervals('sws')
+    sws_ep = data.read_neuroscope_intervals('sws')
+    rem_ep = data.read_neuroscope_intervals('rem')
 
     # ufo_ep, ufo_ts = loadUFOs(path)
     #
@@ -65,28 +69,31 @@ for s in ["ADN-HPC/B5100/B5107/B5107-260217"]:
     #     print("No UFO channels specified for this session {}".format(s))
     #     continue
 
-    ds_ep, ds_ts = loadDentateSpikes(path)
+    ds_ep, ds_tsd = loadDentateSpikes(path)
 
-    # if ds_ep is None:
-    if True:
+    data = nap.EphysReader(path, format="NeuroScopeIO")
+    filename = basename + ".eeg"
+    eeg = data[filename]
+
+    if ds_ep is None:
+    # if True:
         print("No dentate spikes detected in this session {}".format(s))
 
         ###############################################################################################
         # MEMORY MAP
         ###############################################################################################
-        data = nap.EphysReader(path, format="NeuroScopeIO")
+
         # data.load_neurosuite_xml(data.path)
         # channels = data.group_to_channel
-        # num_channels, fs, shank_to_channel, shank_to_keep = loadXML(path)
+
 
         # sign_channels = channels[ds_channels[s][0]]
         # ctrl_channels = channels[ds_channels[s][1]]
-        filename = basename + ".eeg"
+
 
         # fp, timestep = get_memory_map(os.path.join(data.path, filename), data.nChannels, frequency=1250)
         # eeg = nap.TsdFrame(t=timestep, d=fp, columns=np.hstack([ch for ch in channels.values()]))
         # ds_ep, ds_tsd, nSS = detect_dentate_spikes(fp, ds_channels[s], timestep)
-        eeg = data[filename]
 
         ds_ep, ds_tsd, nSS = detect_dentate_spikes2(eeg, ds_channels[s])
 
@@ -117,7 +124,38 @@ for s in ["ADN-HPC/B5100/B5107/B5107-260217"]:
             f.writelines("{:1.6f}".format(t) + "\t" + n + "\n")
         f.close()
 
-        # sys.exit()
+    ###########################################################################################################
+    # Computing DS trigger average
+    num_channels, fs, shank_to_channel, shank_to_keep = loadXML(path)
+    hpc_channels = shank_to_channel[0][shank_to_keep[0]]
+    ds_mean_eeg = {}
+    for ep, name in zip([wake_ep, sws_ep, rem_ep], ['wak', 'sws', 'rem']):
+        print("Computing DS-triggered average EEG for {} epoch".format(name))
+        ds_mean_eeg[name]  = nap.compute_event_triggered_average(eeg[:,hpc_channels], ds_tsd.restrict(ep), binsize=1/500, window=0.2)[:,0,:] * RAW_TO_UV
+
+
+
+    ###########################################################################################################
+    # Summary plot : DS-triggered average EEG for each epoch, one page per session
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharex=True, sharey=True)
+    fig.suptitle(s)
+    im = None
+    for ax, name in zip(axes, ['wak', 'sws', 'rem']):
+        eta = ds_mean_eeg[name]
+        im = ax.imshow(
+            eta.values.T, aspect='auto', cmap='jet',
+            extent=[eta.index[0], eta.index[-1], len(hpc_channels) - 0.5, -0.5]
+            )
+        ax.axvline(0, color='w', linestyle='--', linewidth=1)
+        ax.set_title(name)
+        ax.set_xlabel("Time from DS peak (s)")
+        ax.set_xticks(np.linspace(eta.index[0], eta.index[-1], 5))
+        ax.set_yticks(range(len(hpc_channels)))
+        ax.set_yticklabels(hpc_channels)
+    axes[0].set_ylabel("Channel")
+    fig.colorbar(im, ax=axes, shrink=0.6, label="EEG (µV)")
+    pdf.savefig(fig)
+    plt.close(fig)
 
     # # pynaviz check
     # # toothy ds
@@ -127,11 +165,13 @@ for s in ["ADN-HPC/B5100/B5107/B5107-260217"]:
     # rip_ep = nap.IntervalSet(start=tmp2['start'].values, end=tmp2['stop'].values)
 
 
-    data = nap.EphysReader(path, format="NeuroScopeIO")
-    from pynaviz import scope
-    scope({
-        "DS": ds_ep,
-        # "Ripples": rip_ep,
-        "EEG": data[basename+".eeg"],
-        "nSS": nSS
-          }, layout_path="layout_2026-06-08_14-59.json")
+    # data = nap.EphysReader(path, format="NeuroScopeIO")
+    # from pynaviz import scope
+    # scope({
+    #     "DS": ds_ep,
+    #     # "Ripples": rip_ep,
+    #     "EEG": data[basename+".eeg"],
+    #     "nSS": nSS
+    #       }, layout_path="layout_2026-06-08_14-59.json")
+
+pdf.close()

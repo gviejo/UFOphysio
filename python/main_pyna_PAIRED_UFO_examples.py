@@ -15,7 +15,7 @@ from itertools import combinations
 from functions import *
 from functions.functions import computeLinearVelocity, computeAngularVelocity
 # import pynacollada as pyna
-from ufo_detection import *
+from detection import *
 import warnings
 
 warnings.filterwarnings("ignore")

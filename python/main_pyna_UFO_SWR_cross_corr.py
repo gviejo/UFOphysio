@@ -14,7 +14,7 @@ import _pickle as cPickle
 from matplotlib.gridspec import GridSpec
 from itertools import combinations
 from functions import *
-from ufo_detection import *
+from detection import *
 from matplotlib.pyplot import *
 
 ############################################################################################### 

@@ -10,7 +10,7 @@ from matplotlib.pyplot import *
 
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
-from ufo_detection import *
+from detection import *
 
 from functions.functions import centerTuningCurves, smoothAngularTuningCurves, circmean
 
