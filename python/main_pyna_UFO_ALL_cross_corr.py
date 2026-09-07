@@ -4,17 +4,15 @@
 # @Last Modified by:   Guillaume Viejo
 # @Last Modified time: 2024-06-05 17:16:59
 
-import numpy as np
-import pandas as pd
 import pynapple as nap
-import sys, os
-from pycircstat.descriptive import mean as circmean
-import _pickle as cPickle
+from matplotlib import rcParams, pyplot as plt
+from matplotlib.pyplot import *
+
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
-from itertools import combinations
-from functions import *
-import pynacollada as pyna
+
 from ufo_detection import *
+
+from functions.functions import centerTuningCurves, smoothAngularTuningCurves, circmean
 
 ############################################################################################### 
 # GENERAL infos
@@ -52,45 +50,72 @@ for r in datasets.keys():
         # LOADING DATA
         ###############################################################################################
         path = os.path.join(data_directory, s)
-        data = nap.load_session(path, 'neurosuite')
-        spikes = data.spikes
-        position = data.position
-        wake_ep = data.epochs['wake']
-        sws_ep = data.read_neuroscope_intervals('sws')
-        rem_ep = data.read_neuroscope_intervals('rem')
-        ufo_ep, ufo_ts = loadUFOs(path)
+        basename = os.path.basename(path)
+        filepath = os.path.join(path, "kilosort4", basename + ".nwb")
 
-        idx = spikes._metadata[spikes._metadata["location"].str.contains(r)].index.values
-        spikes = spikes[idx]
+        if os.path.exists(filepath):
+            nwb = nap.load_file(filepath)
+            spikes = nwb['units']
 
-        if ufo_ts is not None:
+            position = []
+            columns = ['x', 'y', 'z', 'rx', 'ry', 'rz']
+            for k in columns:
+                position.append(nwb[k].values)
+            position = np.array(position)
+            position = np.transpose(position)
+            position = nap.TsdFrame(
+                t=nwb['x'].t,
+                d=position,
+                columns=columns,
+                time_support=nwb['position_time_support'])
 
-            tuning_curves = nap.compute_1d_tuning_curves(spikes, position['ry'], 120, minmax=(0, 2*np.pi), ep = position.time_support.loc[[0]])
-            tuning_curves = smoothAngularTuningCurves(tuning_curves, 20, 4)
+            epochs = nwb['epochs']
+            wake_ep = epochs[epochs.tags == "wake"]
+            sws_ep = nwb['sws']
+            rem_ep = nwb['rem']
 
-            SI = nap.compute_1d_mutual_info(tuning_curves, position['ry'], position['ry'].time_support.loc[[0]], minmax=(0,2*np.pi))
+            ufo_ep, ufo_ts = loadUFOs(path)
 
-            spikes = spikes[SI[SI['SI']>SI_thr[r]].index.values]
+            spikes = spikes[spikes.location == r]
 
-            names = [s.split("/")[-1] + "_" + str(n) for n in spikes.keys()]
+            if ufo_ts is not None:
 
-            for e, ep in zip(['wak', 'rem', 'sws'], [wake_ep, rem_ep, sws_ep]):            
-                cc = nap.compute_eventcorrelogram(spikes, ufo_ts, 0.01, 0.6, ep, norm=True)
-                cc.columns = names
-                ccs_long[r][e].append(cc)
+                tuning_curves = nap.compute_tuning_curves(
+                    spikes,
+                    position['ry'],
+                    bins=60,
+                    range=(0, 2 * np.pi),
+                    epochs=position.time_support[0],
+                    feature_names=['angle']
+                )
 
-                cc = nap.compute_eventcorrelogram(spikes, ufo_ts, 0.001, 0.015, ep, norm=True)
-                cc.columns = names
-                ccs_short[r][e].append(cc)
+                tuning_curves = smoothAngularTuningCurves(tuning_curves, 20, 4)
+
+                SI = nap.compute_mutual_information(tuning_curves)['bits/spike']
+
+                spikes.SI = SI
+
+                spikes = spikes[spikes.SI>SI_thr[r]]
+
+                names = [s.split("/")[-1] + "_" + str(n) for n in spikes.keys()]
+
+                for e, ep in zip(['wak', 'rem', 'sws'], [wake_ep, rem_ep, sws_ep]):
+                    cc = nap.compute_eventcorrelogram(spikes, ufo_ts, 0.01, 0.6, ep, norm=True)
+                    cc.columns = names
+                    ccs_long[r][e].append(cc)
+
+                    cc = nap.compute_eventcorrelogram(spikes, ufo_ts, 0.001, 0.015, ep, norm=True)
+                    cc.columns = names
+                    ccs_short[r][e].append(cc)
 
 
-        else:
-            print("No ufo in "+s)
+            else:
+                print("No ufo in "+s)
 
 for r in ccs_long.keys():
     for e in ccs_long[r].keys():
-        ccs_long[r][e] = pd.concat(ccs_long[r][e], 1)
-        ccs_short[r][e] = pd.concat(ccs_short[r][e], 1)
+        ccs_long[r][e] = pd.concat(ccs_long[r][e], axis=1)
+        ccs_short[r][e] = pd.concat(ccs_short[r][e], axis=1)
 
 
 datatosave = {"ccs_long":ccs_long, "ccs_short":ccs_short}
@@ -163,3 +188,4 @@ for j, e in enumerate(ccs_short[r].keys()):
 tight_layout()
 
 savefig(os.path.expanduser("~/Dropbox/UFOPhysio/figures/ALL_CC_UFO_Short.png"))
+

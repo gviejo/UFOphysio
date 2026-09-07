@@ -16,6 +16,7 @@ from itertools import combinations
 # import pynacollada as pyna
 from ufo_detection import *
 from matplotlib.pyplot import *
+import nwbmatic as ntm
 
 ############################################################################################### 
 # GENERAL infos
@@ -45,25 +46,45 @@ for s in datasets:
     # LOADING DATA
     ###############################################################################################
     path = os.path.join(data_directory, s)
-    data = nap.load_session(path, 'neurosuite')
-    spikes = data.spikes
-    position = data.position
-    wake_ep = data.epochs['wake']
-    sws_ep = data.read_neuroscope_intervals('sws')
-    rem_ep = data.read_neuroscope_intervals('rem')
-    ufo_ep, ufo_ts = loadUFOs(path)    
-    
-    r = pd.Series(index=['wak', 'rem', 'sws'], data = np.NaN)    
+    basename = os.path.basename(path)
+    filepath = os.path.join(path, "kilosort4", basename + ".nwb")
 
-    if ufo_ts is not None:      
-        for e, ep in zip(['wak', 'rem', 'sws'], [wake_ep, rem_ep, sws_ep]):
-            r[e] = ufo_ts.restrict(ep).rate
-            tmp = np.hstack([np.diff(ufo_ts.restrict(ep.loc[[i]]).t) for i in ep.index])
-            count, bins = np.histogram(tmp, np.geomspace(0.001, 100, 50))
-            count = count.astype('float')/float(np.sum(count))
-            iui[e][s] = pd.Series(index=bins[0:-1], data=count)
+    if os.path.exists(filepath):
+        nwb = nap.load_file(filepath)
 
-    rates[s.split("/")[-1]] = r
+        spikes = nwb['units']
+        spikes = spikes.getby_threshold("rate", 1)
+
+        position = []
+        columns = ['x', 'y', 'z', 'rx', 'ry', 'rz']
+        for k in columns:
+            position.append(nwb[k].values)
+        position = np.array(position)
+        position = np.transpose(position)
+        position = nap.TsdFrame(
+            t=nwb['x'].t,
+            d=position,
+            columns=columns,
+            time_support=nwb['position_time_support'])
+
+        epochs = nwb['epochs']
+        wake_ep = epochs[epochs.tags == "wake"]
+        sws_ep = nwb['sws']
+        rem_ep = nwb['rem']
+
+        ufo_ep, ufo_ts = loadUFOs(path)
+
+        r = pd.Series(index=['wak', 'rem', 'sws'], data = np.nan)
+
+        if ufo_ts is not None:
+            for e, ep in zip(['wak', 'rem', 'sws'], [wake_ep, rem_ep, sws_ep]):
+                r[e] = ufo_ts.restrict(ep).rate
+                tmp = np.hstack([np.diff(ufo_ts.restrict(ep.loc[[i]]).t) for i in ep.index])
+                count, bins = np.histogram(tmp, np.geomspace(0.001, 100, 50))
+                count = count.astype('float')/float(np.sum(count))
+                iui[e][s] = pd.Series(index=bins[0:-1], data=count)
+
+        rates[s.split("/")[-1]] = r
 
 rates = pd.DataFrame.from_dict(rates).T
 

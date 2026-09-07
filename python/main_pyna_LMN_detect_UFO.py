@@ -2,7 +2,7 @@
 # @Author: Guillaume Viejo
 # @Date:   2022-03-01 12:03:19
 # @Last Modified by:   Guillaume Viejo
-# @Last Modified time: 2024-06-06 17:09:31
+# @Last Modified time: 2024-10-23 11:18:41
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,8 @@ from itertools import combinations
 from functions import *
 # import pynacollada as pyna
 from ufo_detection import *
+import warnings
+warnings.filterwarnings("ignore")
 
 ############################################################################################### 
 # GENERAL infos
@@ -30,69 +32,72 @@ elif os.path.exists('/media/guillaume/Raid2'):
     data_directory = '/media/guillaume/Raid2'
 
 datasets = np.hstack([
-    np.genfromtxt(os.path.join(data_directory,'datasets_LMN.list'), delimiter = '\n', dtype = str, comments = '#'),
-    np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ADN.list'), delimiter = '\n', dtype = str, comments = '#'),
-    np.genfromtxt(os.path.join(data_directory,'datasets_LMN_PSB.list'), delimiter = '\n', dtype = str, comments = '#'),
+    # np.genfromtxt(os.path.join(data_directory,'datasets_LMN.list'), delimiter = '\n', dtype = str, comments = '#'),
+    # np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ADN.list'), delimiter = '\n', dtype = str, comments = '#'),
+    # np.genfromtxt(os.path.join(data_directory,'datasets_LMN_PSB.list'), delimiter = '\n', dtype = str, comments = '#'),
     # np.genfromtxt(os.path.join(data_directory,'datasets_LMN_ripples.list'), delimiter = '\n', dtype = str, comments = '#'),
+    np.genfromtxt(os.path.join(data_directory,'datasets_ADN_DG.list'), delimiter = '\n', dtype = str, comments = '#'),
     ])
 
 ufo_channels = np.genfromtxt(os.path.join(data_directory, 'channels_UFO.txt'), delimiter = ' ', dtype = str, comments = '#')
 ufo_channels = {a[0]:a[1:].astype('int') for a in ufo_channels}
 
 
-datasets = [#"LMN-ADN/A5044/A5044-240401B",
+# datasets = [#"LMN-ADN/A5044/A5044-240401B",
             # "OPTO/B3000/B3007/B3007-240501A",
             # "OPTO/B3000/B3009/B3009-240502C",
             # "OPTO/B3000/B3010/B3010-240510C",
             # "LMN-ADN/A5044/A5044-240403B",
             # "OPTO/B3000/B3007/B3007-240502A",
             # "OPTO/B3000/B3009/B3009-240503C",
-            "OPTO/B3000/B3010/B3010-240511A"]
+            # "OPTO/B3000/B3010/B3010-240511A"]
+
 
 # for s in datasets[19:]:
 # for s in ['LMN/A1411/A1411-200910A']:
-for s in datasets:
-    print(s)
-    ############################################################################################### 
+# for s in ['ADN-HPC/B3214/B3218-241018']:
+# for s in ["ADN-HPC/B5100/B5102/B5102-250915"]:
+# for s in ["ADN-HPC/B5100/B5107/B5107-260218"]:
+for s in [
+    # "ADN-HPC/B5100/B5107/B5107-260217",
+    "ADN-HPC/B5100/B5107/B5107-260218",
+    "ADN-HPC/B5100/B5107/B5107-260219",
+    "ADN-HPC/B5100/B5107/B5107-260224",
+    "ADN-HPC/B5100/B5107/B5107-260227"
+]:
+# for s in datasets:
+
+    ###############################################################################################
     # LOADING DATA
     ###############################################################################################
     path = os.path.join(data_directory, s)
     data = ntm.load_session(path, 'neurosuite')
-    spikes = data.spikes
-    position = data.position
+    basename = data.basename
     wake_ep = data.epochs['wake']
-    #sws_ep = data.read_neuroscope_intervals('sws')    
-    
-    idx = spikes._metadata[spikes._metadata["location"].str.contains("lmn")].index.values
-    spikes = spikes[idx]
+    #sws_ep = data.read_neuroscope_intervals('sws')
 
-    
     ufo_ep, ufo_ts = loadUFOs(path)
 
-    # if ufo_ep is None:        
+    if s not in ufo_channels.keys():
+        print("No UFO channels specified for this session {}".format(s))
+        break
+
+    # if ufo_ep is None:
     if True:
-        ############################################################################################### 
-        # COMPUTING TUNING CURVES
-        ###############################################################################################
-        tuning_curves = nap.compute_1d_tuning_curves(spikes, position['ry'], 120, minmax=(0, 2*np.pi), ep = position.time_support.loc[[0]])
-        # tuning_curves = smoothAngularTuningCurves(tuning_curves, 20, 4)
-        
+
         ###############################################################################################
         # MEMORY MAP
         ###############################################################################################
-        data.load_neurosuite_xml(data.path)
-        channels = data.group_to_channel
-        sign_channels = channels[ufo_channels[s][0]]
-        ctrl_channels = channels[ufo_channels[s][1]]
-        filename = data.basename + ".dat"    
+        data = nap.EphysReader(path, format="NeuroScopeIO")
+        lfp = data[basename + ".dat"]
+        metadata = lfp.metadata
+        sign_channels = metadata[(metadata.group == ufo_channels[s][0]) & (metadata.skip == False)].index.values
+        ctrl_channels = metadata[(metadata.group == ufo_channels[s][1]) & (metadata.skip == False)].index.values
 
-        # # get spike time and clu from res/clu
-        # clu = np.genfromtxt(os.path.join(path, s.split("/")[-1]+".clu."+str(ufo_channels[s][0]+1)), dtype="int")[1:]
-        # res = np.genfromtxt(os.path.join(path, s.split("/")[-1]+".res."+str(ufo_channels[s][0]+1)), dtype="int")
-
-        fp, timestep = get_memory_map(os.path.join(data.path, filename), data.nChannels)
-        
-        ufo_ep, ufo_tsd, nSS = detect_ufos_v2(fp, sign_channels, ctrl_channels, timestep)
+        # sign_channels = sign_channels
+        # ctrl_channels = ctrl_channels
+        #
+        ufo_ep, ufo_tsd, nSS = detect_ufos_v2(lfp.d, sign_channels, ctrl_channels, lfp.t, (4, 100))
         
         ############################
         # Higher threshold for wake
@@ -110,10 +115,10 @@ for s in datasets:
         ####################
         
         # Saving with pynapple
-        ufo_ep.save(os.path.join(path, data.basename + '_ufo_ep'))
-        ufo_tsd.save(os.path.join(path, data.basename + '_ufo_tsd'))
-        nSS = nSS.bin_average(1/5000)
-        nSS.save(os.path.join(data.path, "nSS_LMN"))
+        ufo_ep.save(os.path.join(path, basename + '_ufo_ep'))
+        ufo_tsd.save(os.path.join(path, basename + '_ufo_tsd'))
+        # nSS = nSS.bin_average(1/5000)
+        nSS.save(os.path.join(path, "nSS_LMN"))
 
 
         ###########################################################################################################
@@ -131,10 +136,20 @@ for s in datasets:
                                 (np.repeat(np.array(['UFO stop 1']), n))
                                     )).T.flatten()
         
-        evt_file = os.path.join(path, data.basename + '.evt.py.ufo')
+        evt_file = os.path.join(path, basename + '.evt.py.ufo')
         f = open(evt_file, 'w')
         for t, n in zip(datatowrite, texttowrite):
             f.writelines("{:1.6f}".format(t) + "\t" + n + "\n")
         f.close()   
 
-        # sys.exit()
+
+    # # pynaviz check
+    data = nap.EphysReader(path, format="NeuroScopeIO")
+    # nSS = nap.load_file(os.path.join(path, "nSS_LMN.npz"))
+    nSS = nSS.bin_average(1/5000)
+    from pynaviz import scope
+    scope({
+        "UFO": ufo_ep,
+        "EEG": data[basename+".dat"],
+        "nSS": nSS
+    }, layout_path="layout_2026-05-21_14-52.json")

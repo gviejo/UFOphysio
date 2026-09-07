@@ -14,8 +14,8 @@ import _pickle as cPickle
 from matplotlib.gridspec import GridSpec
 from itertools import combinations
 from functions import *
-import pynacollada as pyna
 from ufo_detection import *
+from matplotlib.pyplot import *
 
 ############################################################################################### 
 # GENERAL infos
@@ -50,7 +50,7 @@ for s in datasets:
     rip_ep, rip_ts = loadRipples(path)
 
     if ufo_ts is not None:        
-        grp = nap.TsGroup({0:ufo_ts,1:rip_ts,}, evt = np.array(['ufo', 'rip']))
+        grp = nap.TsGroup({0:ufo_ts,1:rip_ts,}, metadata={"evt":np.array(['ufo', 'rip'])})
 
         ufo_cc = nap.compute_crosscorrelogram(grp, 0.5, 100, sws_ep, norm=True)
         cc_long[s] = ufo_cc[(0,1)]
